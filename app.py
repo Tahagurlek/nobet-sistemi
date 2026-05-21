@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, session
+from flask import Flask, request, jsonify, send_file, session, send_from_directory
 from flask_cors import CORS
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -9,7 +9,7 @@ import json
 
 print("🚀 APP.PY YÜKLENDI - YENİ VERSİYON!")
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.')
 app.secret_key = 'nobet-sistemi-secret-key-2026'  # Session için secret key
 
 # CORS - Basit ve açık
@@ -37,6 +37,20 @@ USERS = {
 
 # Yayınlanan tablo (gerçek uygulamada veritabanında olmalı)
 published_data = None
+
+# Frontend routes
+@app.route('/')
+def index():
+    """Ana sayfa - login'e yönlendir"""
+    return send_from_directory('.', 'index.html')
+
+@app.route('/<path:path>')
+def static_files(path):
+    """Static dosyaları servis et"""
+    try:
+        return send_from_directory('.', path)
+    except:
+        return "Dosya bulunamadı", 404
 
 @app.route('/health', methods=['GET'])
 def health_check():
