@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nöbet Sistemi - Giriş</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .login-container {
+            background: white;
+            padding: 3rem 2.5rem;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 420px;
+            width: 100%;
+            animation: slideUp 0.5s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .logo h1 {
+            color: #1F2937;
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .logo p {
+            color: #6B7280;
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #374151;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 0.5rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            background: #FEE2E2;
+            color: #DC2626;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-weight: 600;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .help-text {
+            text-align: center;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #E5E7EB;
+        }
+
+        .help-text a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .help-text a:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #6B7280;
+            margin-top: 1rem;
+        }
+
+        .loading.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <div class="logo-icon">🏥</div>
+            <h1>Nöbet Sistemi</h1>
+            <p>Acil Servis Nöbet Yönetimi</p>
+        </div>
+
+        <div id="error-container"></div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label>👤 Kullanıcı Adı</label>
+                <input 
+                    type="text" 
+                    id="username"
+                    placeholder="Kullanıcı adınızı girin"
+                    required
+                    autocomplete="username"
+                />
+            </div>
+
+            <div class="form-group">
+                <label>🔒 Şifre</label>
+                <input 
+                    type="password" 
+                    id="password"
+                    placeholder="Şifrenizi girin"
+                    required
+                    autocomplete="current-password"
+                />
+            </div>
+
+            <button type="submit" class="btn">Giriş Yap</button>
+        </form>
+
+        <div class="loading" id="loading">
+            Giriş yapılıyor...
+        </div>
+
+        <div class="help-text">
+            <p style="color: #6B7280; font-size: 0.9rem;">
+                Şifrenizi mi unuttunuz? <a href="#">Yönetici ile iletişime geçin</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000';
+
+        // Sayfa yüklenince oturum kontrolü
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(`${API_URL}/api/check-auth`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    // Zaten giriş yapılmış, yönlendir
+                    if (data.role === 'admin') {
+                        window.location.href = 'nobet_admin.html';
+                    } else {
+                        window.location.href = 'nobet_view.html';
+                    }
+                }
+            } catch (err) {
+                console.error('Auth kontrol hatası:', err);
+            }
+        });
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorContainer = document.getElementById('error-container');
+            const loading = document.getElementById('loading');
+            
+            // Hata mesajını temizle
+            errorContainer.innerHTML = '';
+            loading.classList.add('show');
+
+            try {
+                const response = await fetch(`${API_URL}/api/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                loading.classList.remove('show');
+
+                if (data.success) {
+                    // Başarılı giriş - role'e göre yönlendir
+                    if (data.role === 'admin') {
+                        window.location.href = 'nobet_admin.html';
+                    } else {
+                        window.location.href = 'nobet_view.html';
+                    }
+                } else {
+                    // Hata göster
+                    showError(data.message || 'Kullanıcı adı veya şifre hatalı');
+                }
+            } catch (err) {
+                loading.classList.remove('show');
+                showError('Bağlantı hatası. Backend sunucusu çalışıyor mu?');
+                console.error('Login hatası:', err);
+            }
+        });
+
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `<div class="error-message">❌ ${message}</div>`;
+        }
+    </script>
+</body>
+</html>

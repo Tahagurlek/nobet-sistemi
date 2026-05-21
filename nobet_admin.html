@@ -1,0 +1,2850 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acil Servis Nöbet Planlama Sistemi v2</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0A4D68;
+            --primary-dark: #05293A;
+            --accent: #088395;
+            --accent-light: #05BFDB;
+            --danger: #DC2626;
+            --warning: #F59E0B;
+            --success: #10B981;
+            --bg-main: #F8FAFB;
+            --bg-card: #FFFFFF;
+            --border: #E5E7EB;
+            --text-primary: #1F2937;
+            --text-secondary: #6B7280;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+            --shadow-lg: 0 10px 30px rgba(0,0,0,0.12);
+        }
+
+        body {
+            font-family: 'Sora', -apple-system, sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .app-container {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0A4D68 0%, #088395 100%);
+            padding: 2rem 1rem;
+        }
+
+        .main-card {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: var(--bg-card);
+            border-radius: 24px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            color: white;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .header-actions {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .controls-section {
+            padding: 1.5rem 2rem;
+            background: #F9FAFB;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .control-group select,
+        .control-group input {
+            padding: 0.7rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-family: 'Sora', sans-serif;
+            font-size: 0.95rem;
+            background: white;
+            transition: all 0.2s;
+        }
+
+        .control-group select:focus,
+        .control-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(8, 131, 149, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Sora', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(10, 77, 104, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(5, 150, 105, 0.3);
+        }
+
+        .btn-info {
+            background: #0EA5E9;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #0284C7;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
+        }
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #D97706;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .btn.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 12px rgba(8, 131, 149, 0.4);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .table-container {
+            padding: 1.5rem 2rem;
+            overflow-x: auto;
+            overflow-y: auto;
+            background: white;
+            max-width: 100%;
+            max-height: 70vh;
+            position: relative;
+            contain: paint;
+        }
+
+        .table-wrapper {
+            position: relative;
+        }
+
+        .table-wrapper.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 9999;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-wrapper.fullscreen .table-container {
+            max-height: 100vh;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .table-container {
+            overflow: hidden;
+            height: calc(100vh - 70px);
+            padding: 0.5rem 1rem;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .schedule-table {
+            width: 100%;
+            transform-origin: top center;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .schedule-cell {
+            padding: 0.2rem;
+            font-size: 0.75rem;
+            min-height: 28px;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .day-header {
+            padding: 0.25rem 0.2rem !important;
+            min-width: 75px;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .day-number {
+            font-size: 0.8rem;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .day-name {
+            font-size: 0.65rem;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .daily-indicator {
+            font-size: 0.6rem;
+            padding: 0 3px;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .physician-header-name {
+            font-size: 0.75rem;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .physician-header-badge {
+            font-size: 0.6rem;
+            padding: 1px 4px;
+        }
+
+        .table-wrapper.fullscreen.fit-mode .schedule-table th {
+            padding: 0.5rem 0.35rem;
+        }
+
+        .table-wrapper.fullscreen .fullscreen-controls {
+            padding: 1rem 2rem;
+            background: #F9FAFB;
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-container.fullscreen .schedule-table {
+            font-size: 0.9rem;
+        }
+
+        .table-container.fullscreen .schedule-cell {
+            min-height: 55px;
+            font-size: 0.95rem;
+        }
+
+        .schedule-table {
+            width: auto;
+            min-width: 100%;
+            border-collapse: collapse;
+            border-spacing: 0;
+            font-size: 0.85rem;
+        }
+
+        .schedule-table thead {
+            position: sticky;
+            top: -1px;
+            z-index: 200;
+            background: var(--primary);
+        }
+
+        .schedule-table thead tr {
+            position: relative;
+            z-index: 201;
+            background: var(--primary);
+        }
+
+        .schedule-table tbody {
+            position: relative;
+            margin-top: -1px;
+        }
+        
+        .schedule-table tbody tr {
+            height: 50px;
+        }
+
+        .schedule-table tbody tr:first-child td {
+            border-top: none;
+        }
+
+        .schedule-table th {
+            background: var(--primary) !important;
+            color: white;
+            padding: 0.75rem 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            min-width: 80px;
+            max-width: 100px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            position: relative;
+            border: none;
+            border-left: none !important;
+            z-index: 202;
+        }
+
+        .schedule-table td {
+            padding: 0;
+            border: 1px solid var(--border);
+            text-align: center;
+            background: white;
+            position: relative;
+            z-index: 1;
+        }
+
+        .schedule-table th:first-child {
+            border-top-left-radius: 12px;
+            min-width: 80px;
+            max-width: 80px;
+            position: sticky;
+            left: 0;
+            z-index: 205;
+            background: var(--primary) !important;
+        }
+
+        .schedule-table th:last-child {
+            border-top-right-radius: 12px;
+        }
+
+        .day-header {
+            font-weight: 600;
+            padding: 0.4rem 0.35rem;
+            min-width: 80px;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+        }
+
+        .day-header::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            z-index: -1;
+        }
+
+        .day-header::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+        }
+
+        .day-number {
+            font-size: 0.95rem;
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .day-name {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .daily-indicator {
+            display: inline-block;
+            background: white;
+            border: 1.5px solid var(--border);
+            border-radius: 4px;
+            padding: 1px 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            vertical-align: middle;
+        }
+
+        .physician-header {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            align-items: center;
+        }
+
+        .physician-header-name {
+            font-size: 0.85rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .physician-header-stats {
+            display: flex;
+            gap: 0.4rem;
+            font-size: 0.7rem;
+            opacity: 0.95;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .physician-header-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .schedule-table td {
+            padding: 0;
+            border: 1px solid var(--border);
+            text-align: center;
+            background: white;
+            position: relative;
+            z-index: 1;
+        }
+
+        .day-header {
+            font-weight: 600;
+            padding: 0.6rem 0.4rem;
+            min-width: 70px;
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+        }
+
+        .day-number {
+            display: block;
+            font-size: 1rem;
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .day-name {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 0.15rem;
+        }
+
+        /* weekend class kaldırıldı - inline style ile kontrol ediliyor */
+
+        .schedule-cell {
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            transition: all 0.2s;
+            padding: 0.3rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.85rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .schedule-cell:active {
+            cursor: grabbing;
+        }
+
+        .schedule-cell:hover {
+            transform: scale(1.05);
+            z-index: 5;
+        }
+
+        .schedule-cell.has-shift {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border-radius: 8px;
+        }
+
+        .schedule-cell.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        .schedule-cell.drag-over {
+            background: #DBEAFE !important;
+            border: 2px dashed #3B82F6;
+        }
+
+        .schedule-cell.excuse {
+            background: #FEE2E2 !important;
+            color: #DC2626 !important;
+            font-weight: 700;
+        }
+
+        .schedule-cell.selecting {
+            background: #DBEAFE;
+            border: 2px solid #3B82F6;
+        }
+
+        .stats-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+            background: #FAFBFC;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 2px solid var(--border);
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--accent-light);
+        }
+
+        .stat-card h3 {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-detail {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .physician-stats {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+
+        .physician-stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: #F9FAFB;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .physician-stat-row:hover {
+            background: #F3F4F6;
+            transform: translateX(4px);
+        }
+
+        .physician-color-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .physician-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+        }
+
+        .physician-hours {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .daily-indicator {
+            display: inline-block;
+            background: white;
+            border: 1.5px solid var(--border);
+            border-radius: 4px;
+            padding: 1px 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+
+        .daily-indicator.good {
+            background: #D1FAE5;
+            color: #065F46;
+            border-color: #10B981;
+        }
+
+        .daily-indicator.warning {
+            background: #FEF3C7;
+            color: #92400E;
+            border-color: #F59E0B;
+        }
+
+        .daily-indicator.danger {
+            background: #FEE2E2;
+            color: #991B1B;
+            border-color: #DC2626;
+        }
+
+        .shift-count-badge {
+            display: inline-block;
+            background: #F3F4F6;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            margin-left: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #E5E7EB;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .stat-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%);
+            transition: width 0.3s ease;
+        }
+
+        .stat-progress-fill.high {
+            background: linear-gradient(90deg, #DC2626 0%, #EF4444 100%);
+        }
+
+        .stat-progress-fill.low {
+            background: linear-gradient(90deg, #10B981 0%, #34D399 100%);
+        }
+
+        .quick-stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            padding: 1rem 2rem;
+            background: white;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .quick-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .quick-stat-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .quick-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--primary);
+        }
+
+        .quick-stat-value.highlight {
+            color: var(--accent);
+        }
+
+        .stats-mini-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .stats-mini-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: #F9FAFB;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .stats-mini-label {
+            color: var(--text-secondary);
+        }
+
+        .stats-mini-value {
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .legend {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            padding: 1.5rem 2rem;
+            background: white;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .legend-box {
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+            border: 2px solid var(--border);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            max-width: 800px;  /* 600px → 800px */
+            width: 90%;
+            max-height: 85vh;  /* 80vh → 85vh */
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .modal-header h2 {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0.5rem;
+            line-height: 1;
+        }
+
+        .close-btn:hover {
+            color: var(--danger);
+        }
+
+        .physician-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .physician-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            background: #F9FAFB;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+        }
+
+        .physician-item input[type="text"] {
+            padding: 0.7rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Sora', sans-serif;
+        }
+
+        .physician-item input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .physician-item input[type="color"] {
+            width: 60px;
+            height: 60px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .delete-physician-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 0.6rem 0.8rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            height: 60px;
+            width: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .delete-physician-btn:hover {
+            background: #B91C1C;
+        }
+
+        .add-physician-btn {
+            margin-top: 1rem;
+            width: 100%;
+        }
+
+        .fullscreen-toggle {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .fullscreen-toggle:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .fullscreen-toggle.active {
+            background: var(--danger);
+        }
+
+        .fullscreen-toggle.active:hover {
+            background: #B91C1C;
+        }
+
+        .footer {
+            padding: 1.5rem 2rem;
+            text-align: center;
+            background: #F9FAFB;
+            border-top: 2px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                padding: 1rem 0.5rem;
+            }
+
+            .header {
+                padding: 1.5rem 1rem;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.4rem;
+            }
+
+            .controls-section {
+                padding: 1rem;
+            }
+
+            .controls-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .stats-dashboard {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+
+            .table-container {
+                padding: 1rem;
+            }
+
+            .schedule-table {
+                font-size: 0.75rem;
+            }
+
+            .schedule-cell {
+                min-height: 50px;
+                font-size: 0.85rem;
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #F3F4F6;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .main-card {
+            animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        // Backend API Configuration
+        const API_URL = 'http://localhost:5000';  // Development
+        // Production'da: const API_URL = 'https://your-app.herokuapp.com';
+
+        const INITIAL_PHYSICIANS = [
+            { name: 'Süheyla Ebrar Eryiğit', displayName: 'Ebrar', color: '#EF4444', tc: '', title: 'Uzm.Dr' },
+            { name: 'Oğuzhan Gümrükçü', displayName: 'Oğuzhan', color: '#3B82F6', tc: '', title: 'Uzm.Dr' },
+            { name: 'Şefik Mert İğneci', displayName: 'Şefik', color: '#10B981', tc: '', title: 'Uzm.Dr' },
+            { name: 'Sude Betül Öncül', displayName: 'Sude', color: '#F59E0B', tc: '', title: 'Uzm.Dr' },
+            { name: 'İsmail Taha Gürlek', displayName: 'İsmail', color: '#8B5CF6', tc: '', title: 'Uzm.Dr' },
+            { name: 'Işıl Tunya Koçak', displayName: 'Tunya', color: '#EC4899', tc: '', title: 'Uzm.Dr' },
+            { name: 'Muhammet Emin Türker', displayName: 'Emin', color: '#06B6D4', tc: '', title: 'Uzm.Dr' },
+            { name: 'Ali Daradkeh', displayName: 'Ali Dark.', color: '#84CC16', tc: '', title: 'Uzm.Dr' },
+            { name: 'Sait Hüseyin Güven', displayName: 'Hüseyin', color: '#F97316', tc: '', title: 'Uzm.Dr' },
+            { name: 'Begzade Rüstemoğlu', displayName: 'Begzade', color: '#A855F7', tc: '', title: 'Uzm.Dr' },
+            { name: 'Turgay Özek', displayName: 'Turgay', color: '#14B8A6', tc: '', title: 'Uzm.Dr' },
+            { name: 'Şahin Kartal', displayName: 'Şahin', color: '#F43F5E', tc: '', title: 'Uzm.Dr' },
+            { name: 'Ali Güzeloğlu', displayName: 'Ali Güz.', color: '#6366F1', tc: '', title: 'Uzm.Dr' }
+        ];
+
+        const SHIFT_TYPES = [
+            { value: '', label: 'Boş', hours: 0 },
+            { value: '24', label: '24 Saat', hours: 24 },
+            { value: '16', label: '16 Saat', hours: 16 },
+            { value: '8', label: '8 Saat', hours: 8 },
+            { value: 'X', label: 'Mazeret', hours: 0 }
+        ];
+
+        const MONTHS = [
+            'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+            'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+        ];
+
+        const DAY_NAMES = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+        const DAY_NAMES_FULL = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+
+        function getDaysInMonth(year, month) {
+            return new Date(year, month + 1, 0).getDate();
+        }
+
+        function getDayName(year, month, day) {
+            const date = new Date(year, month, day);
+            return DAY_NAMES[date.getDay()];
+        }
+
+        function getDayNameFull(year, month, day) {
+            const date = new Date(year, month, day);
+            return DAY_NAMES_FULL[date.getDay()];
+        }
+
+        function isWeekend(year, month, day) {
+            const date = new Date(year, month, day);
+            return date.getDay() === 0 || date.getDay() === 6;
+        }
+
+        function App() {
+            // Auth state'leri
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [user, setUser] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+            
+            // Sayfa yüklenince auth kontrolü yap
+            useEffect(() => {
+                checkAuth();
+            }, []);
+
+            const checkAuth = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/api/check-auth`, {
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.authenticated && data.role === 'admin') {
+                        setIsAuthenticated(true);
+                        setUser(data.username);
+                        setIsLoading(false);
+                    } else {
+                        // Admin değil veya oturum yok - login'e yönlendir
+                        window.location.href = 'nobet_login.html';
+                    }
+                } catch (err) {
+                    console.error('Auth kontrol hatası:', err);
+                    window.location.href = 'nobet_login.html';
+                }
+            };
+            
+            const currentDate = new Date();
+            const [physicians, setPhysicians] = useState(() => {
+                // LocalStorage'dan yükle
+                const saved = localStorage.getItem('nobetSistemi_physicians');
+                if (saved) {
+                    try {
+                        const loaded = JSON.parse(saved);
+                        // weekdayShift yoksa ekle (geriye dönük uyumluluk)
+                        return loaded.map(p => ({
+                            ...p,
+                            weekdayShift: p.weekdayShift || '' // Boş = şablon yok
+                        }));
+                    } catch (e) {
+                        console.error('Physicians yükleme hatası:', e);
+                    }
+                }
+                // Varsayılan: İlk yükleme
+                return INITIAL_PHYSICIANS.map(p => ({
+                    name: p.name,
+                    displayName: p.displayName,
+                    color: p.color || '#3B82F6',
+                    tc: p.tc || '',
+                    title: p.title || 'Uzm.Dr',
+                    weekdayShift: '' // Hafta içi mesai şablonu: '', '8', '16', '24'
+                }));
+            });
+            
+            const [schedule, setSchedule] = useState(() => {
+                // LocalStorage'dan yükle
+                const saved = localStorage.getItem('nobetSistemi_schedule');
+                if (saved) {
+                    try {
+                        return JSON.parse(saved);
+                    } catch (e) {
+                        console.error('Schedule yükleme hatası:', e);
+                    }
+                }
+                return {};
+            });
+            
+            // YENİ: Resmi tatil günleri (gün numaraları array)
+            const [holidays, setHolidays] = useState(() => {
+                const saved = localStorage.getItem('nobetSistemi_holidays');
+                if (saved) {
+                    try {
+                        return JSON.parse(saved);
+                    } catch (e) {
+                        console.error('Holidays yükleme hatası:', e);
+                    }
+                }
+                return []; // Örn: [1, 23, 29] → 1. gün, 23. gün, 29. gün tatil
+            });
+            
+            const [selectedYear, setSelectedYear] = useState(() => {
+                const saved = localStorage.getItem('nobetSistemi_year');
+                return saved ? parseInt(saved) : 2026;
+            });
+            
+            const [selectedMonth, setSelectedMonth] = useState(() => {
+                const saved = localStorage.getItem('nobetSistemi_month');
+                return saved ? parseInt(saved) : new Date().getMonth();
+            });
+            
+            // Physicians her değiştiğinde kaydet
+            useEffect(() => {
+                localStorage.setItem('nobetSistemi_physicians', JSON.stringify(physicians));
+            }, [physicians]);
+            
+            // Schedule her değiştiğinde kaydet
+            useEffect(() => {
+                localStorage.setItem('nobetSistemi_schedule', JSON.stringify(schedule));
+            }, [schedule]);
+            
+            // Year her değiştiğinde kaydet
+            useEffect(() => {
+                localStorage.setItem('nobetSistemi_year', selectedYear.toString());
+            }, [selectedYear]);
+            
+            // Month her değiştiğinde kaydet
+            useEffect(() => {
+                localStorage.setItem('nobetSistemi_month', selectedMonth.toString());
+            }, [selectedMonth]);
+            
+            // Holidays her değiştiğinde kaydet
+            useEffect(() => {
+                localStorage.setItem('nobetSistemi_holidays', JSON.stringify(holidays));
+            }, [holidays]);
+            
+            const [excuseMode, setExcuseMode] = useState(false);
+            const [excuseType, setExcuseType] = useState('YI'); // Varsayılan: Yıllık İzin
+            
+            // TÜM MAZERET TİPLERİ
+            const EXCUSE_TYPES = [
+                { code: 'YI', label: 'Yıllık İzin', short: 'Yİ' },
+                { code: 'R', label: 'Raporlu', short: 'R' },
+                { code: 'EV', label: 'Evlilik İzni', short: 'EV' },
+                { code: 'EI', label: 'Eğitim İzni', short: 'Eİ' },
+                { code: 'GO', label: 'Görevlendirme', short: 'GÖ' },
+                { code: 'MI', label: 'Mazeret İzni', short: 'Mİ' },
+                { code: 'OI', label: 'Ölüm İzni', short: 'Öİ' },
+                { code: 'RI', label: 'Refakat İzni', short: 'Rİ' },
+                { code: 'SEI', label: 'Sendika İzni', short: 'SEİ' },
+                { code: 'KI', label: 'Kongre İzni', short: 'Kİ' },
+                { code: 'IK', label: 'İş Kazası', short: 'İK' },
+                { code: 'II', label: 'İdari İzin', short: 'İİ' },
+                { code: 'SI', label: 'Sevk İzin', short: 'Sİ' },
+                { code: 'B', label: 'Boşluk', short: '' }
+            ];
+            const [excuseColor, setExcuseColor] = useState(() => {
+                const saved = localStorage.getItem('nobetSistemi_excuseColor');
+                return saved || '#A9A9A9';
+            });
+            
+            // excuseColor her değiştiğinde kaydet
+            useEffect(() => {
+                localStorage.setItem('nobetSistemi_excuseColor', excuseColor);
+            }, [excuseColor]);
+            const [selectedPhysicianForExcuse, setSelectedPhysicianForExcuse] = useState(null);
+            const [selectionStart, setSelectionStart] = useState(null);
+            const [selectingCells, setSelectingCells] = useState([]);
+            const [showSettings, setShowSettings] = useState(false);
+            const [draggedShift, setDraggedShift] = useState(null);
+            const [isFullscreen, setIsFullscreen] = useState(false);
+            const [fitMode, setFitMode] = useState(false);
+            const [fitScale, setFitScale] = useState(1);
+
+            const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
+
+            // Ay veya yıl değiştiğinde hafta sonlarını otomatik holidays'e ekle
+            useEffect(() => {
+                const weekendDays = [];
+                for (let day = 1; day <= daysInMonth; day++) {
+                    if (isWeekend(selectedYear, selectedMonth, day)) {
+                        weekendDays.push(day);
+                    }
+                }
+                
+                // Mevcut holidays'i koru ama hafta sonlarını ekle
+                setHolidays(prev => {
+                    const newHolidays = [...prev];
+                    weekendDays.forEach(day => {
+                        if (!newHolidays.includes(day)) {
+                            newHolidays.push(day);
+                        }
+                    });
+                    return newHolidays;
+                });
+            }, [selectedYear, selectedMonth, daysInMonth]);
+
+            // Sığdır modu için zoom hesaplama
+            useEffect(() => {
+                if (fitMode && isFullscreen) {
+                    // Başlık yüksekliği: ~70px, her satır: ~36px
+                    const availableHeight = window.innerHeight - 140; // 70 (başlık) + 70 (padding/margin)
+                    const tableHeight = (daysInMonth * 36) + 60; // satırlar + başlık
+                    const calculatedScale = availableHeight / tableHeight;
+                    // Minimum %85 zoom - çok küçülmesin
+                    const scale = Math.max(0.85, Math.min(1, calculatedScale));
+                    setFitScale(scale);
+                } else {
+                    setFitScale(1);
+                }
+            }, [fitMode, isFullscreen, daysInMonth]);
+
+            // Sürükle-bırak başlat
+            const handleDragStart = (e, physician, day, value) => {
+                if (!value || value === 'X') return;
+                setDraggedShift({ physician, day, value });
+                e.dataTransfer.effectAllowed = 'move';
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            };
+
+            const handleDrop = (e, targetPhysician, targetDay) => {
+                e.preventDefault();
+                if (!draggedShift) return;
+
+                const newSchedule = { ...schedule };
+                const sourceKey = `${draggedShift.physician}-${draggedShift.day}`;
+                const targetKey = `${targetPhysician}-${targetDay}`;
+
+                // Hedef hücreyi kaydet
+                newSchedule[targetKey] = draggedShift.value;
+                // Kaynak hücreyi temizle
+                delete newSchedule[sourceKey];
+
+                setSchedule(newSchedule);
+                setDraggedShift(null);
+            };
+
+            const handleCellClick = (physician, day) => {
+                if (excuseMode) {
+                    const key = `${physician}-${day}`;
+                    const currentValue = schedule[key] || '';
+                    
+                    // Aynı hücreye tekrar tıklanırsa sil
+                    if (currentValue === 'I' || currentValue === 'R' || currentValue === 'B') {
+                        const newSchedule = { ...schedule };
+                        delete newSchedule[key];
+                        setSchedule(newSchedule);
+                        setSelectionStart(null);
+                        setSelectingCells([]);
+                        setSelectedPhysicianForExcuse(null);
+                        return;
+                    }
+                    
+                    // Farklı sütuna tıklanırsa seçimi sıfırla
+                    if (selectedPhysicianForExcuse && selectedPhysicianForExcuse !== physician) {
+                        setSelectionStart(null);
+                        setSelectingCells([]);
+                        setSelectedPhysicianForExcuse(physician);
+                    }
+                    
+                    // İlk tıklama veya farklı sütun
+                    if (!selectedPhysicianForExcuse || selectedPhysicianForExcuse !== physician) {
+                        setSelectedPhysicianForExcuse(physician);
+                        setSelectionStart(day);
+                        setSelectingCells([day]);
+                    } else if (!selectionStart) {
+                        // İlk seçim
+                        setSelectionStart(day);
+                        setSelectingCells([day]);
+                    } else {
+                        // İkinci tıklama - aralığı işaretle
+                        const start = Math.min(selectionStart, day);
+                        const end = Math.max(selectionStart, day);
+                        const newSchedule = { ...schedule };
+                        
+                        for (let d = start; d <= end; d++) {
+                            const k = `${physician}-${d}`;
+                            // Mazeret kodunu direkt kullan (YI, R, EV, EI, GO, vs...)
+                            newSchedule[k] = excuseType;
+                        }
+                        
+                        setSchedule(newSchedule);
+                        setSelectionStart(null);
+                        setSelectingCells([]);
+                    }
+                } else {
+                    const key = `${physician}-${day}`;
+                    const currentValue = schedule[key] || '';
+                    
+                    let nextValue = '';
+                    if (currentValue === '') nextValue = '24';
+                    else if (currentValue === '24') nextValue = '16';
+                    else if (currentValue === '16') nextValue = '8';
+                    else if (currentValue === '8') nextValue = '';
+                    else if (currentValue === 'X') nextValue = '';
+                    
+                    setSchedule({ ...schedule, [key]: nextValue });
+                }
+            };
+
+            const handleCellHover = (day) => {
+                if (excuseMode && selectionStart && selectedPhysicianForExcuse) {
+                    const start = Math.min(selectionStart, day);
+                    const end = Math.max(selectionStart, day);
+                    const cells = [];
+                    for (let d = start; d <= end; d++) {
+                        cells.push(d);
+                    }
+                    setSelectingCells(cells);
+                }
+            };
+
+            const addPhysician = () => {
+                const newPhysician = {
+                    name: `Yeni Hekim ${physicians.length + 1}`,
+                    displayName: `Hekim ${physicians.length + 1}`,
+                    color: '#' + Math.floor(Math.random()*16777215).toString(16)
+                };
+                setPhysicians([...physicians, newPhysician]);
+            };
+
+            const deletePhysician = (index) => {
+                if (confirm('Bu hekimi silmek istediğinize emin misiniz? Tüm nöbet kayıtları silinecektir.')) {
+                    const physicianName = physicians[index].name;
+                    const newSchedule = { ...schedule };
+                    
+                    Object.keys(newSchedule).forEach(key => {
+                        if (key.startsWith(physicianName + '-')) {
+                            delete newSchedule[key];
+                        }
+                    });
+                    
+                    setSchedule(newSchedule);
+                    setPhysicians(physicians.filter((_, i) => i !== index));
+                }
+            };
+
+            // HEKİM SÜRÜKLE-BIRAK FONKSİYONLARI
+            const [draggedPhysicianIndex, setDraggedPhysicianIndex] = useState(null);
+
+            const handlePhysicianDragStart = (index) => {
+                setDraggedPhysicianIndex(index);
+            };
+
+            const handlePhysicianDragOver = (e, index) => {
+                e.preventDefault();
+                if (draggedPhysicianIndex === null || draggedPhysicianIndex === index) return;
+                
+                const newPhysicians = [...physicians];
+                const draggedItem = newPhysicians[draggedPhysicianIndex];
+                
+                // Eski konumdan çıkar
+                newPhysicians.splice(draggedPhysicianIndex, 1);
+                
+                // Yeni konuma ekle
+                newPhysicians.splice(index, 0, draggedItem);
+                
+                setPhysicians(newPhysicians);
+                setDraggedPhysicianIndex(index);
+            };
+
+            const handlePhysicianDragEnd = () => {
+                setDraggedPhysicianIndex(null);
+            };
+
+            const updatePhysician = (index, field, value) => {
+                const newPhysicians = [...physicians];
+                newPhysicians[index][field] = value;
+                setPhysicians(newPhysicians);
+            };
+
+            const stats = useMemo(() => {
+                const physicianHours = {};
+                const physicianShiftCount = {};
+                const dailyPhysicians = {};
+                
+                physicians.forEach(p => {
+                    physicianHours[p.name] = 0;
+                    physicianShiftCount[p.name] = 0;
+                });
+                for (let d = 1; d <= daysInMonth; d++) dailyPhysicians[d] = 0;
+
+                Object.entries(schedule).forEach(([key, value]) => {
+                    const [physician, day] = key.split('-');
+                    const shift = SHIFT_TYPES.find(s => s.value === value);
+                    
+                    if (shift && shift.hours > 0) {
+                        physicianHours[physician] = (physicianHours[physician] || 0) + shift.hours;
+                        physicianShiftCount[physician] = (physicianShiftCount[physician] || 0) + 1;
+                        dailyPhysicians[parseInt(day)]++;
+                    }
+                });
+
+                const totalHours = Object.values(physicianHours).reduce((a, b) => a + b, 0);
+                const totalShifts = Object.values(physicianShiftCount).reduce((a, b) => a + b, 0);
+                const avgHours = totalHours / physicians.length;
+                const avgShifts = totalShifts / physicians.length;
+                const avgDaily = Object.values(dailyPhysicians).reduce((a, b) => a + b, 0) / daysInMonth;
+                
+                // En yüksek ve en düşük yük
+                const maxHours = Math.max(...Object.values(physicianHours), 0);
+                const minHours = Math.min(...Object.values(physicianHours).filter(h => h > 0), 999);
+
+                // FAZLA MESAİ HESAPLAMALARI
+                const mesaiGunleri = daysInMonth - holidays.length; // Toplam gün - Tatil günleri
+                const fazlaMesaiSuresiSiniri = mesaiGunleri * 8; // 8 saat × Mesai günü sayısı
+                const kurtaranNobetSayisi = Math.floor(fazlaMesaiSuresiSiniri / 24); // Sınır ÷ 24
+                
+                // Her hekim için fazla mesai hesapla
+                const physicianFazlaMesai = {};
+                physicians.forEach(p => {
+                    const toplamSaat = physicianHours[p.name] || 0;
+                    const fazlaMesai = toplamSaat - fazlaMesaiSuresiSiniri;
+                    physicianFazlaMesai[p.name] = fazlaMesai;
+                });
+
+                return { 
+                    physicianHours, 
+                    physicianShiftCount,
+                    physicianFazlaMesai,  // YENİ
+                    dailyPhysicians, 
+                    totalHours, 
+                    totalShifts,
+                    avgHours, 
+                    avgShifts,
+                    avgDaily,
+                    maxHours,
+                    minHours: minHours === 999 ? 0 : minHours,
+                    mesaiGunleri,  // YENİ
+                    fazlaMesaiSuresiSiniri,  // YENİ
+                    kurtaranNobetSayisi  // YENİ
+                };
+            }, [schedule, daysInMonth, physicians, holidays]);
+
+            const exportToExcel = async () => {
+                // Kullanıcıya seçenek sun
+                const useBackend = confirm(
+                    '🚀 NÖBET LİSTESİ OLUŞTURMA\n\n' +
+                    '✅ TAMAM: Backend API kullan (template bazlı, formatlar korunur)\n' +
+                    '❌ İPTAL: Eski yöntem (SheetJS, formatlar değişebilir)\n\n' +
+                    'Backend önerilir!'
+                );
+
+                if (useBackend) {
+                    await exportToExcelBackend();
+                } else {
+                    await exportToExcelOld();
+                }
+            };
+
+            // BACKEND İLE NÖBET LİSTESİ
+            const exportToExcelBackend = async () => {
+                try {
+                    // Backend sağlık kontrolü
+                    const healthCheck = await fetch(`${API_URL}/health`);
+                    if (!healthCheck.ok) {
+                        throw new Error('Backend sunucusuna erişilemiyor!');
+                    }
+
+                    // Template artık backend'de - kullanıcı yüklemesin
+                    const formData = new FormData();
+                    formData.append('data', JSON.stringify({
+                        physicians: physicians,
+                        schedule: schedule,
+                        year: selectedYear,
+                        month: selectedMonth,
+                        daysInMonth: daysInMonth,
+                        excuseColor: excuseColor,
+                        holidays: holidays  // YENİ: Tatil günleri
+                    }));
+
+                    const response = await fetch(`${API_URL}/api/create-nobet-listesi`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Backend hatası');
+                    }
+
+                    // Excel dosyasını indir
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const monthNames = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN',
+                                      'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK'];
+                    a.download = `Nobet_Listesi_${monthNames[selectedMonth]}_${selectedYear}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+
+                    alert('✅ Nöbet listesi başarıyla oluşturuldu!\n\nTemplate otomatik yüklendi.');
+
+                } catch (error) {
+                    console.error('Backend error:', error);
+                    alert(
+                        '❌ Backend Hatası!\n\n' +
+                        error.message + '\n\n' +
+                        '💡 Backend çalışmıyor olabilir.'
+                    );
+                }
+            };
+
+            // ESKİ YÖNTEM (SheetJS)
+            const exportToExcelOld = () => {
+                // HTML tablosu oluştur
+                let html = '<html><head><meta charset="utf-8"><style>';
+                html += 'table { border-collapse: collapse; font-family: Arial; }';
+                html += 'td, th { border: 1px solid black; padding: 8px; text-align: center; }';
+                html += '</style></head><body><table>';
+                
+                // Başlık satırı
+                html += '<tr>';
+                html += '<th style="background-color: white;"></th>'; // Tarih sütunu başlığı
+                html += '<th style="background-color: white;"></th>'; // Gün sütunu başlığı
+                physicians.forEach(physician => {
+                    const bgColor = physician.color;
+                    html += `<th style="background-color: ${bgColor}; color: white; font-weight: bold;">${physician.displayName || physician.name}</th>`;
+                });
+                html += '</tr>';
+                
+                // Her gün için satır
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dayNameFull = getDayNameFull(selectedYear, selectedMonth, day);
+                    const dateStr = `${String(day).padStart(2, '0')}.${String(selectedMonth + 1).padStart(2, '0')}.${selectedYear}`;
+                    
+                    html += '<tr>';
+                    html += `<td style="background-color: #E8E8E8; text-align: center;">${dateStr}</td>`;
+                    html += `<td style="background-color: #E8E8E8; text-align: center;">${dayNameFull}</td>`;
+                    
+                    physicians.forEach(physician => {
+                        const key = `${physician.name}-${day}`;
+                        const value = schedule[key] || '';
+                        
+                        let bgColor = 'white';
+                        let text = '';
+                        
+                        // Mazeret türleri - hepsi gri ve boş
+                        if (value === 'I' || value === 'R' || value === 'B' || value === 'X') {
+                            bgColor = '#A9A9A9';
+                            text = '';
+                        } else if (value === '24') {
+                            // 24 saat - renkli boş
+                            bgColor = physician.color;
+                            text = '';
+                        } else if (value === '16') {
+                            // 16 saat - renkli + sayı
+                            bgColor = physician.color;
+                            text = '16';
+                        } else if (value === '8') {
+                            // 8 saat - renkli + sayı
+                            bgColor = physician.color;
+                            text = '8';
+                        }
+                        
+                        const fontColor = (bgColor !== 'white') ? 'white' : 'black';
+                        html += `<td style="background-color: ${bgColor}; color: ${fontColor}; font-weight: bold;">${text}</td>`;
+                    });
+                    
+                    html += '</tr>';
+                }
+                
+                html += '</table></body></html>';
+                
+                // Blob oluştur ve indir
+                const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Nobet_Listesi_${MONTHS[selectedMonth]}_${selectedYear}.xls`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            };
+
+            const exportPuantaj = async () => {
+                // Kullanıcıya seçenek sun
+                const useBackend = confirm(
+                    '🚀 PUANTAJ OLUŞTURMA\n\n' +
+                    '✅ TAMAM: Backend API kullan (formatlar %100 korunur, otomatik indirilir)\n' +
+                    '❌ İPTAL: Kopyala-Yapıştır (manuel, ama hızlı)\n\n' +
+                    'Backend çalışıyor mu kontrol edilecek...'
+                );
+
+                if (useBackend) {
+                    await exportPuantajBackend();
+                } else {
+                    await exportPuantajCopyPaste();
+                }
+            };
+
+            // SEÇENEK 1: Backend API ile otomatik
+            const exportPuantajBackend = async () => {
+                try {
+                    // Backend sağlık kontrolü
+                    const healthCheck = await fetch(`${API_URL}/health`);
+                    if (!healthCheck.ok) {
+                        throw new Error('Backend sunucusuna erişilemiyor!');
+                    }
+
+                    // Template artık backend'de - kullanıcı yüklemesin
+                    const formData = new FormData();
+                    formData.append('data', JSON.stringify({
+                        physicians: physicians,
+                        schedule: schedule,
+                        year: selectedYear,
+                        month: selectedMonth,
+                        daysInMonth: daysInMonth,
+                        holidays: holidays  // YENİ: Tatil günleri
+                    }));
+
+                    const response = await fetch(`${API_URL}/api/create-puantaj`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Backend hatası');
+                    }
+
+                    // Excel dosyasını indir
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const monthNames = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN',
+                                      'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK'];
+                    a.download = `Puantaj_${monthNames[selectedMonth]}_${selectedYear}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+
+                    alert('✅ Puantaj başarıyla oluşturuldu!\n\nTemplate otomatik yüklendi.');
+
+                } catch (error) {
+                    console.error('Backend error:', error);
+                    alert(
+                        '❌ Backend Hatası!\n\n' +
+                        error.message + '\n\n' +
+                        '💡 Backend çalışmıyor olabilir.'
+                    );
+                }
+            };
+
+            // NÖBET İSİMLERİ OLUŞTUR (Backend)
+            const exportNobetIsimleri = async () => {
+                try {
+                    const healthCheck = await fetch(`${API_URL}/health`);
+                    if (!healthCheck.ok) {
+                        throw new Error('Backend sunucusuna erişilemiyor!');
+                    }
+
+                    const formData = new FormData();
+                    formData.append('data', JSON.stringify({
+                        physicians: physicians,
+                        schedule: schedule,
+                        year: selectedYear,
+                        month: selectedMonth,
+                        daysInMonth: daysInMonth,
+                        holidays: holidays  // YENİ: Tatil günleri
+                    }));
+
+                    const response = await fetch(`${API_URL}/api/create-nobet-isimleri`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Backend hatası');
+                    }
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const monthNames = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN',
+                                      'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK'];
+                    a.download = `Nobet_Isimleri_${monthNames[selectedMonth]}_${selectedYear}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+
+                    alert('✅ Nöbet isimleri listesi başarıyla oluşturuldu!');
+
+                } catch (error) {
+                    console.error('Backend error:', error);
+                    alert(
+                        '❌ Backend Hatası!\n\n' +
+                        error.message + '\n\n' +
+                        '💡 Backend çalışmıyor olabilir.'
+                    );
+                }
+            };
+
+            // SEÇENEK 2: Kopyala-Yapıştır (Mevcut Sistem)
+            const exportPuantajCopyPaste = async () => {
+                // Puantaj template dosyasını yükle
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.xlsx';
+                
+                input.onchange = async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        
+                        const monthNames = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN', 
+                                          'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK'];
+                        
+                        // Template'deki hekim listesini oku ve eşleştir
+                        const templateDoctors = [];
+                        
+                        for (let row = 4; row <= 25; row++) {
+                            const nameCell = XLSX.utils.encode_cell({ r: row - 1, c: 2 }); // C sütunu
+                            const doctorNameInTemplate = worksheet[nameCell] ? worksheet[nameCell].v : '';
+                            
+                            if (!doctorNameInTemplate || doctorNameInTemplate.trim() === '') {
+                                continue; // Boş satır, atla
+                            }
+                            
+                            // TAM EŞLEŞME
+                            const physician = physicians.find(p => {
+                                const pName = p.name.toUpperCase().trim();
+                                const tName = doctorNameInTemplate.toUpperCase().trim();
+                                return pName === tName;
+                            });
+                            
+                            templateDoctors.push({
+                                name: doctorNameInTemplate,
+                                physician: physician,
+                                matched: !!physician
+                            });
+                        }
+                        
+                        // Kopyalanabilir tablo oluştur
+                        let tableHTML = '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial; font-size: 12px;">';
+                        
+                        // Başlık satırı
+                        tableHTML += '<tr style="background-color: #0A4D68; color: white; font-weight: bold; text-align: center;">';
+                        for (let day = 1; day <= daysInMonth; day++) {
+                            tableHTML += `<th style="min-width: 50px;">${day}</th>`;
+                        }
+                        tableHTML += '</tr>';
+                        
+                        // Hekim satırları (template sırasına göre)
+                        let matchedCount = 0;
+                        let unmatchedCount = 0;
+                        
+                        templateDoctors.forEach((item) => {
+                            tableHTML += '<tr>';
+                            
+                            if (item.matched && item.physician) {
+                                matchedCount++;
+                                // Eşleşen hekim - nöbet verilerini yaz
+                                for (let day = 1; day <= daysInMonth; day++) {
+                                    const key = `${item.physician.name}-${day}`;
+                                    const value = schedule[key] || '';
+                                    
+                                    let cellValue = '';
+                                    let cellStyle = 'text-align: center; padding: 8px;';
+                                    
+                                    if (value === 'I') {
+                                        cellValue = 'Yİ';
+                                    } else if (value === 'R') {
+                                        cellValue = 'R';
+                                    } else if (value === 'B') {
+                                        cellValue = '';
+                                    } else if (value === '24' || value === '16' || value === '8') {
+                                        cellValue = value;
+                                    } else if (value === 'X') {
+                                        cellValue = 'R';
+                                    }
+                                    
+                                    tableHTML += `<td style="${cellStyle}">${cellValue}</td>`;
+                                }
+                            } else {
+                                unmatchedCount++;
+                                // Eşleşmeyen hekim - boş satır
+                                for (let day = 1; day <= daysInMonth; day++) {
+                                    tableHTML += '<td style="text-align: center; background-color: #FEE; padding: 8px;">-</td>';
+                                }
+                            }
+                            
+                            tableHTML += '</tr>';
+                        });
+                        
+                        tableHTML += '</table>';
+                        
+                        // Yeni pencerede göster
+                        const newWindow = window.open('', '_blank', 'width=1400,height=800');
+                        newWindow.document.write(
+                            '<!DOCTYPE html>' +
+                            '<html>' +
+                            '<head>' +
+                                '<meta charset="UTF-8">' +
+                                '<title>Puantaj - Kopyala Yapıştır</title>' +
+                                '<style>' +
+                                    'body { font-family: Arial; padding: 20px; background: #f5f5f5; }' +
+                                    '.container { background: white; padding: 20px; border-radius: 8px; max-width: 1400px; margin: 0 auto; }' +
+                                    '.header { background: #0A4D68; color: white; padding: 15px; border-radius: 6px; margin-bottom: 20px; }' +
+                                    '.instructions { background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin-bottom: 20px; border-radius: 4px; }' +
+                                    '.stats { background: #F0FDF4; border-left: 4px solid #10B981; padding: 15px; margin-bottom: 20px; border-radius: 4px; }' +
+                                    '.warning { background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-bottom: 20px; border-radius: 4px; }' +
+                                    '.copy-btn { background: #10B981; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }' +
+                                    '.copy-btn:hover { background: #059669; }' +
+                                    '.success { display: none; background: #D1FAE5; color: #065F46; padding: 10px; border-radius: 4px; margin-top: 10px; text-align: center; font-weight: 600; }' +
+                                    'table { margin: 20px auto; }' +
+                                    'ol { margin: 10px 0; padding-left: 25px; }' +
+                                    'li { margin: 8px 0; }' +
+                                    'strong { color: #0A4D68; }' +
+                                '</style>' +
+                            '</head>' +
+                            '<body>' +
+                                '<div class="container">' +
+                                    '<div class="header">' +
+                                        '<h2 style="margin: 0;">📋 ' + monthNames[selectedMonth] + ' ' + selectedYear + ' Puantaj Verileri</h2>' +
+                                    '</div>' +
+                                    
+                                    '<div class="stats">' +
+                                        '<h3 style="margin-top: 0;">✅ Eşleştirme Sonucu</h3>' +
+                                        '<p style="margin: 5px 0;"><strong>Eşleşen:</strong> ' + matchedCount + ' hekim</p>' +
+                                        (unmatchedCount > 0 ? '<p style="margin: 5px 0; color: #DC2626;"><strong>Eşleşmeyen:</strong> ' + unmatchedCount + ' hekim (kırmızı satırlar)</p>' : '') +
+                                    '</div>' +
+                                    
+                                    '<div class="instructions">' +
+                                        '<h3 style="margin-top: 0;">📝 Nasıl Kullanılır?</h3>' +
+                                        '<ol>' +
+                                            '<li><strong>"📋 Tabloyu Kopyala"</strong> butonuna tıklayın</li>' +
+                                            '<li>Puantaj Excel dosyanızı açın</li>' +
+                                            '<li><strong>E4 hücresine</strong> (1. hekim, 1. gün) tıklayın</li>' +
+                                            '<li><strong>Ctrl+V</strong> ile yapıştırın</li>' +
+                                            '<li>✅ Tüm nöbet verileri yerleşecek!</li>' +
+                                        '</ol>' +
+                                    '</div>' +
+                                    
+                                    (unmatchedCount > 0 ? 
+                                        '<div class="warning">' +
+                                            '<h3 style="margin-top: 0;">⚠️ Dikkat</h3>' +
+                                            '<p>Kırmızı satırlar eşleşmedi. Bu hekimlerin nöbetlerini manuel girin veya uygulama hekim isimlerini düzenleyin.</p>' +
+                                        '</div>' 
+                                    : '') +
+                                    
+                                    '<div style="text-align: center; margin: 20px 0;">' +
+                                        '<button class="copy-btn" onclick="copyTable()">📋 Tabloyu Kopyala</button>' +
+                                        '<div class="success" id="success">✅ Tablo kopyalandı! Excel\'e yapıştırabilirsiniz (Ctrl+V)</div>' +
+                                    '</div>' +
+                                    
+                                    '<div style="overflow-x: auto;">' +
+                                        tableHTML +
+                                    '</div>' +
+                                '</div>' +
+                                
+                                '<scr' + 'ipt>' +
+                                    'function copyTable() {' +
+                                        'var table = document.querySelector("table");' +
+                                        'var range = document.createRange();' +
+                                        'range.selectNode(table);' +
+                                        'window.getSelection().removeAllRanges();' +
+                                        'window.getSelection().addRange(range);' +
+                                        'try {' +
+                                            'document.execCommand("copy");' +
+                                            'document.getElementById("success").style.display = "block";' +
+                                            'setTimeout(function() {' +
+                                                'document.getElementById("success").style.display = "none";' +
+                                            '}, 3000);' +
+                                        '} catch (err) {' +
+                                            'alert("Kopyalama basarisiz.");' +
+                                        '}' +
+                                        'window.getSelection().removeAllRanges();' +
+                                    '}' +
+                                '</scr' + 'ipt>' +
+                            '</body>' +
+                            '</html>'
+                        );
+                        newWindow.document.close();
+                        
+                    } catch (error) {
+                        console.error('Puantaj oluşturma hatası:', error);
+                        alert('❌ Template okuma hatası:\n\n' + error.message);
+                    }
+                };
+                
+                input.click();
+            };
+
+
+            const clearSchedule = () => {
+                const choice = confirm(
+                    '🗑️ TEMİZLEME SEÇENEKLERİ\n\n' +
+                    'TAMAM: Sadece nöbet listesini temizle\n' +
+                    'İPTAL: Hiçbir şey yapma\n\n' +
+                    'Hekim bilgilerini de sıfırlamak için önce TAMAM, sonra "Tümünü Sıfırla" butonunu kullanın.'
+                );
+                
+                if (choice) {
+                    setSchedule({});
+                    alert('✅ Nöbet listesi temizlendi. Hekim bilgileri korundu.');
+                }
+            };
+            
+            const resetAllData = () => {
+                const confirm1 = confirm(
+                    '⚠️ DİKKAT!\n\n' +
+                    'TÜM VERİLER SİLİNECEK:\n' +
+                    '- Hekim bilgileri\n' +
+                    '- Nöbet listesi\n' +
+                    '- Renk ayarları\n\n' +
+                    'Devam etmek istediğinize emin misiniz?'
+                );
+                
+                if (confirm1) {
+                    const confirm2 = confirm('⚠️ SON UYARI!\n\nGerçekten tüm veriyi silmek istiyor musunuz?\n\nBu işlem geri alınamaz!');
+                    
+                    if (confirm2) {
+                        // Tüm localStorage verilerini temizle
+                        localStorage.removeItem('nobetSistemi_physicians');
+                        localStorage.removeItem('nobetSistemi_schedule');
+                        localStorage.removeItem('nobetSistemi_year');
+                        localStorage.removeItem('nobetSistemi_month');
+                        localStorage.removeItem('nobetSistemi_excuseColor');
+                        localStorage.removeItem('nobetSistemi_holidays');
+                        
+                        alert('✅ Tüm veriler silindi. Sayfa yenilenecek...');
+                        window.location.reload();
+                    }
+                }
+            };
+
+            const publishSchedule = async () => {
+                if (!confirm('📢 Nöbet programını yayınlamak istiyor musunuz?\n\nYayınlanan program görüntüleme sayfasında herkes tarafından görülebilir olacak.')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_URL}/api/publish`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            physicians: physicians,
+                            schedule: schedule,
+                            year: selectedYear,
+                            month: selectedMonth,
+                            daysInMonth: daysInMonth,
+                            holidays: holidays
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('✅ Nöbet programı başarıyla yayınlandı!\n\nPratisyenler artık görüntüleme sayfasından görebilir.');
+                    } else {
+                        alert('❌ Yayınlama başarısız: ' + (data.message || 'Bilinmeyen hata'));
+                    }
+                } catch (err) {
+                    alert('❌ Bağlantı hatası: ' + err.message);
+                }
+            };
+
+            const handleLogout = async () => {
+                if (confirm('🚪 Çıkış yapmak istediğinize emin misiniz?')) {
+                    try {
+                        await fetch(`${API_URL}/api/logout`, {
+                            method: 'POST',
+                            credentials: 'include'
+                        });
+                        window.location.href = 'nobet_login.html';
+                    } catch (err) {
+                        console.error('Çıkış hatası:', err);
+                        window.location.href = 'nobet_login.html';
+                    }
+                }
+            };
+
+            const toggleFullscreen = () => {
+                setIsFullscreen(!isFullscreen);
+                if (!isFullscreen) {
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    document.body.style.overflow = 'auto';
+                    setFitMode(false);
+                }
+            };
+
+            const getPhysicianColor = (physicianName) => {
+                const physician = physicians.find(p => p.name === physicianName);
+                return physician ? physician.color : '#6B7280';
+            };
+
+            const getDailyIndicator = (count) => {
+                if (count === 0) return { text: '0', class: 'danger' };
+                if (count === 1) return { text: '1', class: 'warning' };
+                if (count === 2) return { text: '2', class: 'good' };
+                if (count >= 3) return { text: count.toString(), class: 'good' };
+                return { text: count.toString(), class: '' };
+            };
+
+            return (
+                <>
+                    {isLoading ? (
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            height: '100vh',
+                            fontSize: '1.5rem',
+                            color: '#6B7280'
+                        }}>
+                            🔄 Yükleniyor...
+                        </div>
+                    ) : (
+                        <div className="app-container">
+                    <div className="main-card">
+                        <div className="header">
+                            <div className="header-content">
+                                <h1>🏥 Acil Servis Nöbet Planlama Sistemi</h1>
+                                <p>Akıllı sürükle-bırak nöbet yönetimi ve raporlama platformu</p>
+                            </div>
+                            <div className="header-actions">
+                                <button className="btn btn-secondary btn-sm" onClick={() => setShowSettings(true)}>
+                                    ⚙️ Hekim Ayarları
+                                </button>
+                                <button 
+                                    className="btn btn-danger btn-sm" 
+                                    onClick={handleLogout}
+                                    style={{marginLeft: '0.5rem'}}
+                                >
+                                    🚪 Çıkış
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="controls-section">
+                            <div className="controls-grid">
+                                <div className="control-group">
+                                    <label>Yıl Seçin</label>
+                                    <select 
+                                        value={selectedYear}
+                                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                    >
+                                        {[2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035].map(year => (
+                                            <option key={year} value={year}>{year}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="control-group">
+                                    <label>Ay Seçin</label>
+                                    <select 
+                                        value={selectedMonth}
+                                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                    >
+                                        {MONTHS.map((month, idx) => (
+                                            <option key={idx} value={idx}>{month}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="button-group">
+                                <button 
+                                    className={`btn ${excuseMode ? 'btn-warning active' : 'btn-secondary'}`}
+                                    onClick={() => {
+                                        setExcuseMode(!excuseMode);
+                                        setSelectionStart(null);
+                                        setSelectingCells([]);
+                                        setSelectedPhysicianForExcuse(null);
+                                    }}
+                                >
+                                    📋 {excuseMode ? 'Mazeret Modu Aktif' : 'Mazeret Tanımla'}
+                                </button>
+                                
+                                {excuseMode && (
+                                    <select 
+                                        value={excuseType}
+                                        onChange={(e) => setExcuseType(e.target.value)}
+                                        className="btn"
+                                        style={{
+                                            marginLeft: '0.5rem',
+                                            padding: '0.5rem 1rem',
+                                            border: '2px solid #F59E0B',
+                                            background: '#FEF3C7',
+                                            color: '#92400E',
+                                            fontWeight: '600',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {EXCUSE_TYPES.map(excuse => (
+                                            <option key={excuse.code} value={excuse.code}>
+                                                {excuse.label} ({excuse.short || 'Boş'})
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                                
+                                <button 
+                                    className={`btn fullscreen-toggle ${isFullscreen ? 'active' : 'btn-primary'}`}
+                                    onClick={toggleFullscreen}
+                                >
+                                    {isFullscreen ? '✕ Tam Ekrandan Çık' : '⛶ Tam Ekran'}
+                                </button>
+                                <button className="btn btn-success" onClick={exportToExcel}>
+                                    📊 Nöbet Listesi (Excel)
+                                </button>
+                                <button className="btn btn-primary" onClick={exportPuantaj}>
+                                    📋 Puantaj Oluştur
+                                </button>
+                                <button className="btn btn-info" onClick={exportNobetIsimleri}>
+                                    👥 Nöbet İsimleri
+                                </button>
+                                <button className="btn btn-secondary" onClick={clearSchedule}>
+                                    🗑️ Temizle
+                                </button>
+                                <button 
+                                    className="btn btn-danger" 
+                                    onClick={resetAllData}
+                                    style={{background: '#DC2626', color: 'white'}}
+                                >
+                                    ⚠️ Tümünü Sıfırla
+                                </button>
+                                <button 
+                                    className="btn btn-warning" 
+                                    onClick={publishSchedule}
+                                    style={{background: '#F59E0B', color: 'white', fontWeight: '700'}}
+                                >
+                                    📢 Yayınla
+                                </button>
+                                <button 
+                                    className="btn btn-info" 
+                                    onClick={() => window.open('/nobet_view.html', '_blank')}
+                                    style={{background: '#06B6D4', color: 'white'}}
+                                >
+                                    👁️ Önizle
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="legend">
+                            <div className="legend-item">
+                                <span style={{color: '#6B7280', fontSize: '0.85rem'}}>
+                                    💡 Günlük Hekim Sayısı: <span className="daily-indicator good">2+</span> İyi | 
+                                    <span className="daily-indicator warning" style={{margin: '0 0.25rem'}}>1</span> Az | 
+                                    <span className="daily-indicator danger" style={{margin: '0 0.25rem'}}>0</span> Boş
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="quick-stats-bar">
+                            <div className="quick-stat">
+                                <span className="quick-stat-label">Toplam Mesai</span>
+                                <span className="quick-stat-value highlight">{stats.totalHours} saat</span>
+                            </div>
+                            <div className="quick-stat">
+                                <span className="quick-stat-label">Toplam Nöbet</span>
+                                <span className="quick-stat-value">{stats.totalShifts}</span>
+                            </div>
+                            <div className="quick-stat">
+                                <span className="quick-stat-label">Ortalama/Hekim</span>
+                                <span className="quick-stat-value">{Math.round(stats.avgHours)} saat</span>
+                            </div>
+                            <div className="quick-stat">
+                                <span className="quick-stat-label">Günlük Ort.</span>
+                                <span className="quick-stat-value">{stats.avgDaily.toFixed(1)} 👨‍⚕️</span>
+                            </div>
+                            <div className="quick-stat">
+                                <span className="quick-stat-label">En Yüksek Yük</span>
+                                <span className="quick-stat-value" style={{color: stats.maxHours > stats.avgHours * 1.2 ? '#DC2626' : '#088395'}}>
+                                    {stats.maxHours} saat
+                                </span>
+                            </div>
+                            <div className="quick-stat">
+                                <span className="quick-stat-label">En Düşük Yük</span>
+                                <span className="quick-stat-value" style={{color: stats.minHours < stats.avgHours * 0.8 ? '#10B981' : '#088395'}}>
+                                    {stats.minHours} saat
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className={`table-wrapper ${isFullscreen ? 'fullscreen' : ''} ${fitMode ? 'fit-mode' : ''}`}>
+                            {isFullscreen && (
+                                <div className="fullscreen-controls">
+                                    <h3 style={{margin: 0, color: 'var(--primary)'}}>
+                                        📋 {MONTHS[selectedMonth]} {selectedYear} Nöbet Çizelgesi
+                                    </h3>
+                                    <div style={{display: 'flex', gap: '1rem'}}>
+                                        <button 
+                                            className={`btn btn-secondary btn-sm ${fitMode ? 'active' : ''}`}
+                                            onClick={() => setFitMode(!fitMode)}
+                                        >
+                                            {fitMode ? '📏 Normal Görünüm' : '⬇️ Ekrana Sığdır'}
+                                        </button>
+                                        <button 
+                                            className="btn fullscreen-toggle active"
+                                            onClick={toggleFullscreen}
+                                        >
+                                            ✕ Tam Ekrandan Çık
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="table-container">
+                                <table className="schedule-table" style={fitMode ? {transform: `scale(${fitScale})`} : {}}>
+                                <thead>
+                                    <tr>
+                                        <th>Gün</th>
+                                        {physicians.map(physician => (
+                                            <th key={physician.name} title={physician.name}>
+                                                <div className="physician-header">
+                                                    <div style={{
+                                                        width: '100%',
+                                                        height: '3px',
+                                                        background: physician.color,
+                                                        borderRadius: '2px',
+                                                        marginBottom: '0.5rem'
+                                                    }}></div>
+                                                    <span className="physician-header-name">{physician.displayName || physician.name}</span>
+                                                    <div className="physician-header-stats">
+                                                        <span className="physician-header-badge">
+                                                            {stats.physicianShiftCount[physician.name] || 0}×
+                                                        </span>
+                                                        <span className="physician-header-badge">
+                                                            {stats.physicianHours[physician.name] || 0}s
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+                                        const indicator = getDailyIndicator(stats.dailyPhysicians[day] || 0);
+                                        const isWeekendDay = isWeekend(selectedYear, selectedMonth, day);
+                                        
+                                        // Tatil kontrolü: holidays array'inde var mı?
+                                        // Hafta sonları için özel mantık:
+                                        // - Hafta sonu + holidays'de YOK = Beyaz (çalışma günü yapılmış)
+                                        // - Hafta sonu + holidays'de VAR = Gri (tatil)
+                                        // - Hafta içi + holidays'de VAR = Gri (tatil)
+                                        // - Hafta içi + holidays'de YOK = Beyaz (çalışma günü)
+                                        
+                                        const isInHolidays = holidays.includes(day);
+                                        const showAsHoliday = isInHolidays;
+                                        
+                                        // Tatil işaretleme fonksiyonu
+                                        const toggleHoliday = () => {
+                                            if (isInHolidays) {
+                                                // Tatilden çıkar (çalışma günü yap)
+                                                setHolidays(holidays.filter(d => d !== day));
+                                            } else {
+                                                // Tatil yap (holidays'e ekle)
+                                                setHolidays([...holidays, day]);
+                                            }
+                                        };
+                                        
+                                        return (
+                                            <tr key={day}>
+                                                <td 
+                                                    className="day-header"
+                                                    onClick={toggleHoliday}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        backgroundColor: showAsHoliday ? '#D1D5DB' : '#FFFFFF',
+                                                        color: showAsHoliday ? '#1F2937' : '#374151',
+                                                        minHeight: '50px'
+                                                    }}
+                                                    title={
+                                                        showAsHoliday 
+                                                            ? 'Tatil - Tıkla: Çalışma günü yap' 
+                                                            : 'Çalışma günü - Tıkla: Tatil yap'
+                                                    }
+                                                >
+                                                    <span className="day-number">{day}</span>
+                                                    <span className="day-name">{getDayName(selectedYear, selectedMonth, day)}</span>
+                                                    <span className={`daily-indicator ${indicator.class}`} title={`${stats.dailyPhysicians[day] || 0} hekim görevli`}>
+                                                        {indicator.text}
+                                                    </span>
+                                                </td>
+                                                {physicians.map(physician => {
+                                                const key = `${physician.name}-${day}`;
+                                                const value = schedule[key] || '';
+                                                const isSelecting = excuseMode && selectedPhysicianForExcuse === physician.name && selectingCells.includes(day);
+                                                const isDragging = draggedShift?.physician === physician.name && draggedShift?.day === day;
+                                                
+                                                // Tüm mazeret kodları (14 çeşit + eski formatlar)
+                                                const excuseCodes = ['YI', 'R', 'EV', 'EI', 'GO', 'MI', 'OI', 'RI', 
+                                                                    'SEI', 'KI', 'IK', 'II', 'SI', 'B', 'I', 'X'];
+                                                const isExcuse = excuseCodes.includes(value);
+                                                
+                                                let cellStyle = {};
+                                                let cellContent = '';
+                                                
+                                                if (isExcuse) {
+                                                    // Tüm mazeretler aynı renk (excuseColor)
+                                                    cellStyle = {
+                                                        background: excuseColor,
+                                                        color: 'white',
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: 'bold'
+                                                    };
+                                                    // B (Boşluk) için boş, diğerleri göster
+                                                    cellContent = value === 'B' ? '' : value;
+                                                } else if (value && !excuseCodes.includes(value)) {
+                                                    const opacity = value === '24' ? '1' : value === '16' ? '0.8' : '0.6';
+                                                    cellStyle = {
+                                                        background: physician.color,
+                                                        color: 'white',
+                                                        opacity: opacity
+                                                    };
+                                                    cellContent = value; // Artık 's' yok
+                                                }
+                                                
+                                                // Tooltip için mazeret isimlerini göster
+                                                const excuseNames = {
+                                                    'YI': 'Yıllık İzin', 'I': 'Yıllık İzin',
+                                                    'R': 'Raporlu',
+                                                    'EV': 'Evlilik İzni',
+                                                    'EI': 'Eğitim İzni',
+                                                    'GO': 'Görevlendirme',
+                                                    'MI': 'Mazeret İzni',
+                                                    'OI': 'Ölüm İzni',
+                                                    'RI': 'Refakat İzni',
+                                                    'SEI': 'Sendika İzni',
+                                                    'KI': 'Kongre İzni',
+                                                    'IK': 'İş Kazası',
+                                                    'II': 'İdari İzin',
+                                                    'SI': 'Sevk İzin',
+                                                    'B': 'Boşluk',
+                                                    'X': 'Mazeret'
+                                                };
+                                                const tooltipText = isExcuse ? (excuseNames[value] || 'Mazeret') : '';
+                                                
+                                                return (
+                                                    <td key={key}>
+                                                        <div 
+                                                            className={`schedule-cell ${value && !isExcuse && value !== 'X' ? 'has-shift' : ''} ${isExcuse || value === 'X' ? 'excuse' : ''} ${isSelecting ? 'selecting' : ''} ${isDragging ? 'dragging' : ''}`}
+                                                            style={cellStyle}
+                                                            draggable={value && !isExcuse && value !== 'X'}
+                                                            onClick={() => handleCellClick(physician.name, day)}
+                                                            onMouseEnter={() => handleCellHover(day)}
+                                                            onDragStart={(e) => handleDragStart(e, physician.name, day, value)}
+                                                            onDragOver={handleDragOver}
+                                                            onDrop={(e) => handleDrop(e, physician.name, day)}
+                                                            title={tooltipText}
+                                                        >
+                                                            {cellContent}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+
+                        {!isFullscreen && (
+                            <div className="stats-dashboard">
+                            <div className="stat-card">
+                                <h3>📊 Toplam Mesai Saati</h3>
+                                <div className="stat-value">{stats.totalHours}</div>
+                                <div className="stat-detail">Bu ay toplam planlanan mesai</div>
+                                <div className="stats-mini-grid">
+                                    <div className="stats-mini-item">
+                                        <span className="stats-mini-label">En fazla:</span>
+                                        <span className="stats-mini-value">{stats.maxHours} saat</span>
+                                    </div>
+                                    <div className="stats-mini-item">
+                                        <span className="stats-mini-label">En az:</span>
+                                        <span className="stats-mini-value">{stats.minHours} saat</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="stat-card">
+                                <h3>⚖️ Hekim Başı Ortalama</h3>
+                                <div className="stat-value">{Math.round(stats.avgHours)}</div>
+                                <div className="stat-detail">Saat/hekim ortalama yük</div>
+                                <div className="stat-progress-bar">
+                                    <div className="stat-progress-fill" style={{width: `${Math.min((stats.avgHours / 200) * 100, 100)}%`}}></div>
+                                </div>
+                            </div>
+
+                            <div className="stat-card">
+                                <h3>🔢 Toplam Nöbet Sayısı</h3>
+                                <div className="stat-value">{stats.totalShifts}</div>
+                                <div className="stat-detail">Ay içi toplam nöbet adedi</div>
+                                <div className="stats-mini-grid">
+                                    <div className="stats-mini-item">
+                                        <span className="stats-mini-label">Ortalama:</span>
+                                        <span className="stats-mini-value">{stats.avgShifts.toFixed(1)} nöbet</span>
+                                    </div>
+                                    <div className="stats-mini-item">
+                                        <span className="stats-mini-label">Günlük:</span>
+                                        <span className="stats-mini-value">{stats.avgDaily.toFixed(1)} hekim</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="stat-card">
+                                <h3>⏰ Fazla Mesai Bilgileri</h3>
+                                <div className="stat-value">{stats.fazlaMesaiSuresiSiniri}s</div>
+                                <div className="stat-detail">Fazla Mesai Süresi Sınırı</div>
+                                <div className="stats-mini-grid">
+                                    <div className="stats-mini-item">
+                                        <span className="stats-mini-label">Mesai Günleri:</span>
+                                        <span className="stats-mini-value">{stats.mesaiGunleri} gün</span>
+                                    </div>
+                                    <div className="stats-mini-item">
+                                        <span className="stats-mini-label">Kurtaran Nöbet:</span>
+                                        <span className="stats-mini-value">{stats.kurtaranNobetSayisi} adet</span>
+                                    </div>
+                                </div>
+                                <div className="stat-detail" style={{marginTop: '0.5rem', fontSize: '0.85rem', color: '#6B7280'}}>
+                                    Formül: 8 saat × {stats.mesaiGunleri} mesai günü = {stats.fazlaMesaiSuresiSiniri}s
+                                </div>
+                            </div>
+
+                            <div className="stat-card" style={{gridColumn: '1 / -1', marginTop: '1rem'}}>
+                                <h3>👨‍⚕️ Hekim Bazlı Detaylar</h3>
+                                <div style={{overflowX: 'auto', marginTop: '1rem'}}>
+                                    <table style={{
+                                        width: '100%',
+                                        borderCollapse: 'collapse',
+                                        fontSize: '0.9rem'
+                                    }}>
+                                        <thead>
+                                            <tr style={{
+                                                background: '#F9FAFB',
+                                                borderBottom: '2px solid #E5E7EB'
+                                            }}>
+                                                <th style={{padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#374151'}}>
+                                                    Hekim
+                                                </th>
+                                                <th style={{padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151'}}>
+                                                    Nöbet Sayısı
+                                                </th>
+                                                <th style={{padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151'}}>
+                                                    Toplam Saat
+                                                </th>
+                                                <th style={{padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151'}}>
+                                                    Fazla Mesai
+                                                </th>
+                                                <th style={{padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151'}}>
+                                                    Ortalamadan Fark
+                                                </th>
+                                                <th style={{padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151'}}>
+                                                    Yük Durumu
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {physicians.map(physician => {
+                                                const hours = stats.physicianHours[physician.name] || 0;
+                                                const shifts = stats.physicianShiftCount[physician.name] || 0;
+                                                const fazlaMesai = stats.physicianFazlaMesai[physician.name] || 0;
+                                                const deviation = hours - stats.avgHours;
+                                                const deviationPercent = stats.avgHours > 0 ? (deviation / stats.avgHours) * 100 : 0;
+                                                
+                                                let yukDurumu = '⚖️ Normal';
+                                                let yukRenk = '#6B7280';
+                                                if (Math.abs(deviationPercent) > 20) {
+                                                    if (deviationPercent > 0) {
+                                                        yukDurumu = '🔴 Yüksek Yük';
+                                                        yukRenk = '#DC2626';
+                                                    } else {
+                                                        yukDurumu = '🟢 Düşük Yük';
+                                                        yukRenk = '#10B981';
+                                                    }
+                                                }
+                                                
+                                                return (
+                                                    <tr key={physician.name} style={{
+                                                        borderBottom: '1px solid #F3F4F6',
+                                                        transition: 'background 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.background = '#F9FAFB'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                                    >
+                                                        <td style={{padding: '0.75rem'}}>
+                                                            <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                                                                <span style={{
+                                                                    width: '12px',
+                                                                    height: '12px',
+                                                                    borderRadius: '50%',
+                                                                    background: physician.color,
+                                                                    display: 'inline-block'
+                                                                }}></span>
+                                                                <span style={{fontWeight: '600', color: '#1F2937'}}>
+                                                                    {physician.displayName || physician.name}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td style={{padding: '0.75rem', textAlign: 'center'}}>
+                                                            <span style={{
+                                                                background: '#DBEAFE',
+                                                                color: '#1E40AF',
+                                                                padding: '0.25rem 0.75rem',
+                                                                borderRadius: '12px',
+                                                                fontWeight: '600',
+                                                                fontSize: '0.85rem'
+                                                            }}>
+                                                                {shifts}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{padding: '0.75rem', textAlign: 'center'}}>
+                                                            <span style={{
+                                                                fontWeight: '700',
+                                                                fontSize: '1rem',
+                                                                color: '#1F2937'
+                                                            }}>
+                                                                {hours}s
+                                                            </span>
+                                                        </td>
+                                                        <td style={{padding: '0.75rem', textAlign: 'center'}}>
+                                                            <span style={{
+                                                                fontWeight: '700',
+                                                                fontSize: '0.95rem',
+                                                                color: fazlaMesai > 0 ? '#DC2626' : fazlaMesai < 0 ? '#10B981' : '#6B7280'
+                                                            }}>
+                                                                {fazlaMesai > 0 ? '+' : ''}{fazlaMesai}s
+                                                            </span>
+                                                        </td>
+                                                        <td style={{padding: '0.75rem', textAlign: 'center'}}>
+                                                            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem'}}>
+                                                                <span style={{
+                                                                    fontWeight: '600',
+                                                                    color: Math.abs(deviationPercent) > 20 ? 
+                                                                        (deviationPercent > 0 ? '#DC2626' : '#10B981') : 
+                                                                        '#6B7280'
+                                                                }}>
+                                                                    {deviation > 0 ? '+' : ''}{Math.round(deviation)}s
+                                                                </span>
+                                                                <span style={{
+                                                                    fontSize: '0.75rem',
+                                                                    color: '#9CA3AF'
+                                                                }}>
+                                                                    ({deviationPercent > 0 ? '+' : ''}{deviationPercent.toFixed(1)}%)
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td style={{padding: '0.75rem', textAlign: 'center'}}>
+                                                            <span style={{
+                                                                color: yukRenk,
+                                                                fontWeight: '600',
+                                                                fontSize: '0.85rem'
+                                                            }}>
+                                                                {yukDurumu}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        )}
+
+                        {!isFullscreen && (
+                        <div className="footer">
+                            <p>💡 <strong>İpucu:</strong> Hücrelere tıklayarak nöbet atayın (24s → 16s → 8s → Boş) veya nöbetleri sürükleyip başka hücrelere taşıyın.</p>
+                            <p style={{marginTop: '0.5rem', fontSize: '0.85rem', opacity: '0.8'}}>Devlet Hastanesi Acil Servis Yönetim Sistemi © 2026</p>
+                        </div>
+                        )}
+                    </div>
+
+                    {/* Hekim Ayarları Modal */}
+                    <div className={`modal ${showSettings ? 'active' : ''}`} onClick={() => setShowSettings(false)}>
+                        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h2>⚙️ Hekim Yönetimi</h2>
+                                <button className="close-btn" onClick={() => setShowSettings(false)}>×</button>
+                            </div>
+                            
+                            <p style={{marginBottom: '1rem', color: '#6B7280', fontSize: '0.9rem'}}>
+                                💡 <strong>İpucu:</strong> "Tam adı" puantaj template'indeki isimle eşleşmeli (örn: Süheyla Ebrar Eryiğit). "Tablo gösterimi" sadece ekranda kısa gösterim için kullanılır.
+                            </p>
+
+                            <div className="physician-list">
+                                {physicians.map((physician, index) => (
+                                    <div 
+                                        key={index} 
+                                        className="physician-item"
+                                        draggable
+                                        onDragStart={() => handlePhysicianDragStart(index)}
+                                        onDragOver={(e) => handlePhysicianDragOver(e, index)}
+                                        onDragEnd={handlePhysicianDragEnd}
+                                        style={{
+                                            cursor: 'move',
+                                            opacity: draggedPhysicianIndex === index ? 0.5 : 1,
+                                            transition: 'opacity 0.2s'
+                                        }}
+                                    >
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            marginRight: '0.5rem',
+                                            fontSize: '1.2rem',
+                                            color: '#9CA3AF',
+                                            cursor: 'grab'
+                                        }}>
+                                            ⋮⋮
+                                        </div>
+                                        <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                                            <input
+                                                type="text"
+                                                value={physician.name}
+                                                onChange={(e) => updatePhysician(index, 'name', e.target.value)}
+                                                placeholder="Tam adı (örn: Süheyla Ebrar Eryiğit)"
+                                                style={{fontSize: '0.9rem', fontWeight: '600'}}
+                                            />
+                                            <input
+                                                type="text"
+                                                value={physician.displayName || ''}
+                                                onChange={(e) => updatePhysician(index, 'displayName', e.target.value)}
+                                                placeholder="Tablo gösterimi (kısa, örn: Ebrar)"
+                                                style={{fontSize: '0.85rem', background: '#F9FAFB'}}
+                                            />
+                                            <div style={{display: 'flex', gap: '0.5rem'}}>
+                                                <input
+                                                    type="text"
+                                                    value={physician.tc || ''}
+                                                    onChange={(e) => updatePhysician(index, 'tc', e.target.value)}
+                                                    placeholder="TC Kimlik No"
+                                                    maxLength="11"
+                                                    style={{fontSize: '0.85rem', background: '#F9FAFB', flex: 1}}
+                                                />
+                                                <select
+                                                    value={physician.title || 'Uzm.Dr'}
+                                                    onChange={(e) => updatePhysician(index, 'title', e.target.value)}
+                                                    style={{fontSize: '0.85rem', background: '#F9FAFB', flex: '0 0 100px'}}
+                                                >
+                                                    <option value="Tabip">Tabip</option>
+                                                    <option value="Uzm.Dr">Uzm.Dr</option>
+                                                </select>
+                                            </div>
+                                            <select
+                                                value={physician.weekdayShift || ''}
+                                                onChange={(e) => {
+                                                    const shift = e.target.value;
+                                                    updatePhysician(index, 'weekdayShift', shift);
+                                                    
+                                                    // Mesai günlerine otomatik ata
+                                                    if (shift) {
+                                                        const newSchedule = {...schedule};
+                                                        for (let day = 1; day <= daysInMonth; day++) {
+                                                            // Tatil değilse ve hafta içi ise
+                                                            if (!holidays.includes(day) && !isWeekend(selectedYear, selectedMonth, day)) {
+                                                                const key = `${physician.name}-${day}`;
+                                                                // Sadece boş günlere ata (mevcut nöbetleri silme)
+                                                                if (!newSchedule[key]) {
+                                                                    newSchedule[key] = shift;
+                                                                }
+                                                            }
+                                                        }
+                                                        setSchedule(newSchedule);
+                                                    }
+                                                }}
+                                                style={{
+                                                    fontSize: '0.85rem', 
+                                                    background: '#FEF3C7', 
+                                                    border: '1px solid #F59E0B',
+                                                    color: '#92400E',
+                                                    fontWeight: '500'
+                                                }}
+                                                title="Mesai günlerine otomatik 8 saat atar"
+                                            >
+                                                <option value="">Mesai Çalışmıyor</option>
+                                                <option value="8">✅ Hafta İçi Mesai (8 saat)</option>
+                                            </select>
+                                        </div>
+                                        <input
+                                            type="color"
+                                            value={physician.color || '#3B82F6'}
+                                            onChange={(e) => updatePhysician(index, 'color', e.target.value)}
+                                        />
+                                        <button 
+                                            className="delete-physician-btn"
+                                            onClick={() => {
+                                                if (confirm(`${physician.displayName || physician.name} için tüm nöbetleri temizlemek istediğinize emin misiniz?`)) {
+                                                    const newSchedule = {...schedule};
+                                                    // Bu hekimin tüm nöbetlerini sil
+                                                    Object.keys(newSchedule).forEach(key => {
+                                                        if (key.startsWith(physician.name + '-')) {
+                                                            delete newSchedule[key];
+                                                        }
+                                                    });
+                                                    setSchedule(newSchedule);
+                                                }
+                                            }}
+                                            style={{
+                                                background: '#FEF2F2',
+                                                color: '#DC2626',
+                                                border: '1px solid #FCA5A5',
+                                                padding: '0.4rem 0.6rem',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '600'
+                                            }}
+                                            title="Bu hekimin tüm nöbetlerini temizle"
+                                        >
+                                            🗑️ Nöbetleri Temizle
+                                        </button>
+                                        <button 
+                                            className="delete-physician-btn"
+                                            onClick={() => deletePhysician(index)}
+                                            title="Hekimi sil"
+                                        >
+                                            ❌
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button className="btn btn-primary add-physician-btn" onClick={addPhysician}>
+                                ➕ Yeni Hekim Ekle
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                    )}
+                </>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
