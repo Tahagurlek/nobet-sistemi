@@ -16,8 +16,8 @@ app.secret_key = 'nobet-sistemi-secret-key-2026'  # Session için secret key
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 # Session ayarları
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # HTTP için Lax
-app.config['SESSION_COOKIE_SECURE'] = False  # Dev için False
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Cross-domain için None
+app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS gerektirir
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # Manuel CORS header'ları ekle
