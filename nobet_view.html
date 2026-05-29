@@ -72,16 +72,6 @@
             transform: translateY(-2px);
         }
 
-        .btn-excel {
-            background: #10B981;
-            color: white;
-        }
-
-        .btn-excel:hover {
-            background: #059669;
-            transform: translateY(-2px);
-        }
-
         .loading {
             text-align: center;
             padding: 4rem;
@@ -119,15 +109,18 @@
         .schedule-table th {
             background: #667eea;
             color: white;
-            padding: 1.2rem;
-            text-align: left;
+            padding: 1rem;
+            text-align: center;
             font-weight: 600;
+            font-size: 0.9rem;
             border-bottom: 2px solid #667eea;
         }
 
         .schedule-table td {
-            padding: 1rem 1.2rem;
+            padding: 0.75rem;
             border-bottom: 1px solid #E5E7EB;
+            text-align: center;
+            font-weight: 600;
         }
 
         .schedule-table tr:hover {
@@ -139,19 +132,18 @@
         }
 
         .day-cell {
-            font-weight: 600;
             color: #1F2937;
-            min-width: 80px;
+            min-width: 70px;
+            font-weight: 700;
         }
 
         .shift-cell {
             display: inline-block;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
             font-weight: 600;
-            font-size: 0.9rem;
-            text-align: center;
-            min-width: 80px;
+            font-size: 0.85rem;
+            min-width: 60px;
         }
 
         .shift-24 {
@@ -169,46 +161,13 @@
             color: #92400E;
         }
 
-        .holiday {
-            background: #F3F4F6;
-            color: #6B7280;
-            font-style: italic;
-        }
-
         .empty-cell {
             color: #9CA3AF;
         }
 
         .month-info {
             color: #6B7280;
-            font-size: 1.1rem;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-
-        .stat-card h3 {
-            color: #667eea;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-card .value {
-            color: #1F2937;
-            font-size: 1.8rem;
-            font-weight: 700;
+            font-size: 1rem;
         }
 
         @media (max-width: 768px) {
@@ -230,13 +189,22 @@
                 flex: 1;
             }
 
+            .header-content h1 {
+                font-size: 1.5rem;
+            }
+
             .schedule-table {
-                overflow-x: auto;
+                font-size: 0.85rem;
+            }
+
+            .schedule-table th,
+            .schedule-table td {
+                padding: 0.5rem;
             }
 
             .shift-cell {
-                font-size: 0.8rem;
-                padding: 0.4rem 0.6rem;
+                padding: 0.3rem 0.6rem;
+                font-size: 0.75rem;
             }
         }
     </style>
@@ -252,8 +220,6 @@
         function App() {
             const [publishedData, setPublishedData] = useState(null);
             const [loading, setLoading] = useState(true);
-            const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [username, setUsername] = useState('');
 
             useEffect(() => {
                 checkAuthAndLoadData();
@@ -270,9 +236,6 @@
                         window.location.href = 'nobet_login.html';
                         return;
                     }
-
-                    setIsAuthenticated(true);
-                    setUsername(authData.username);
 
                     const dataResponse = await fetch(`${API_URL}/api/published`, {
                         credentials: 'include'
@@ -298,30 +261,6 @@
                     window.location.href = 'nobet_login.html';
                 } catch (err) {
                     console.error('Çıkış hatası:', err);
-                }
-            };
-
-            const downloadExcel = async () => {
-                try {
-                    const response = await fetch(`${API_URL}/api/create-nobet-listesi`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify(publishedData)
-                    });
-                    
-                    if (response.ok) {
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Nobet_${publishedData.month}_${publishedData.year}.xlsx`;
-                        document.body.appendChild(a);
-                        a.click();
-                        window.URL.revokeObjectURL(url);
-                    }
-                } catch (err) {
-                    alert('❌ İndirme hatası: ' + err.message);
                 }
             };
 
@@ -361,27 +300,7 @@
                             <p className="month-info">{monthNames[month]} {year}</p>
                         </div>
                         <div className="header-actions">
-                            <button className="btn btn-excel" onClick={downloadExcel}>📥 Excel İndir</button>
                             <button className="btn btn-logout" onClick={handleLogout}>🚪 Çıkış</button>
-                        </div>
-                    </div>
-
-                    <div className="stats">
-                        <div className="stat-card">
-                            <h3>📅 Ay</h3>
-                            <div className="value">{monthNames[month]}</div>
-                        </div>
-                        <div className="stat-card">
-                            <h3>👨‍⚕️ Hekimler</h3>
-                            <div className="value">{physicians.length}</div>
-                        </div>
-                        <div className="stat-card">
-                            <h3>📊 Toplam Gün</h3>
-                            <div className="value">{daysInMonth}</div>
-                        </div>
-                        <div className="stat-card">
-                            <h3>🔓 Yayınlandı</h3>
-                            <div className="value">✅</div>
                         </div>
                     </div>
 
@@ -391,12 +310,8 @@
                                 <tr>
                                     <th>Gün</th>
                                     {physicians.map(p => (
-                                        <th key={p.name} style={{minWidth: '120px'}}>
+                                        <th key={p.name}>
                                             {p.displayName || p.name}
-                                            <br />
-                                            <span style={{fontSize: '0.75rem', fontWeight: '400'}}>
-                                                {p.title}
-                                            </span>
                                         </th>
                                     ))}
                                 </tr>
@@ -407,7 +322,7 @@
                                     const isHoliday = holidays && holidays.includes(day);
 
                                     return (
-                                        <tr key={day} className={isHoliday ? 'holiday' : ''}>
+                                        <tr key={day} style={isHoliday ? {background: '#F3F4F6'} : {}}>
                                             <td className="day-cell">
                                                 {day} {dayNames[date.getDay()]}
                                             </td>
@@ -418,10 +333,7 @@
                                                 let cellContent = '-';
                                                 let cellClass = '';
                                                 
-                                                if (isHoliday && !value) {
-                                                    cellContent = '🎉 Tatil';
-                                                    cellClass = '';
-                                                } else if (value === '24') {
+                                                if (value === '24') {
                                                     cellContent = '24 Saat';
                                                     cellClass = 'shift-24';
                                                 } else if (value === '16') {
@@ -432,8 +344,6 @@
                                                     cellClass = 'shift-8';
                                                 } else if (value && value !== '') {
                                                     cellContent = value;
-                                                } else if (!isHoliday) {
-                                                    cellContent = '-';
                                                 }
 
                                                 return (
@@ -442,8 +352,6 @@
                                                             <span className={`shift-cell ${cellClass}`}>
                                                                 {cellContent}
                                                             </span>
-                                                        ) : cellContent === '🎉 Tatil' ? (
-                                                            <span>{cellContent}</span>
                                                         ) : (
                                                             <span className="empty-cell">{cellContent}</span>
                                                         )}
