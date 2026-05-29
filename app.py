@@ -6,8 +6,24 @@ import io
 import os
 from datetime import datetime
 import json
+import sqlite3
 
-print("🚀 APP.PY YÜKLENDI - YENİ VERSİYON!")
+print("🚀 APP.PY YÜKLENDI - VERİTABANI İLE!")
+
+# Veritabanı başlatma
+def init_db():
+    try:
+        conn = sqlite3.connect('nobet.db')
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS published_tables
+                     (id INTEGER PRIMARY KEY, data TEXT, created_at TIMESTAMP)''')
+        conn.commit()
+        conn.close()
+        print("✅ Veritabanı hazırlandı")
+    except Exception as e:
+        print(f"⚠️ DB hata: {e}")
+
+init_db()
 
 app = Flask(__name__, static_folder='.')
 app.secret_key = 'nobet-sistemi-secret-key-2026'  # Session için secret key
@@ -102,7 +118,6 @@ def check_auth():
 @app.route('/api/publish', methods=['POST'])
 def publish():
     """Tabloyu yayınla (sadece admin)"""
-    global published_data
     
     print(f"📢 Publish isteği - Session: {session}")
     
@@ -110,20 +125,44 @@ def publish():
         print(f"❌ Yetki yok! Session role: {session.get('role')}")
         return jsonify({'success': False, 'message': 'Yetkiniz yok'}), 403
     
-    data = request.json
-    published_data = data
-    print(f"✅ Tablo yayınlandı!")
-    
-    return jsonify({'success': True, 'message': 'Tablo yayınlandı'})
+    try:
+        data = request.json
+        conn = sqlite3.connect('nobet.db')
+        c = conn.cursor()
+        
+        # Son kaydı sil, yenisini ekle (tüm uygulamada tek tablo)
+        c.execute('DELETE FROM published_tables')
+        c.execute('INSERT INTO published_tables (data, created_at) VALUES (?, ?)',
+                  (json.dumps(data), datetime.now()))
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Tablo yayınlandı ve veritabanına kaydedildi!")
+        return jsonify({'success': True, 'message': 'Tablo yayınlandı'})
+    except Exception as e:
+        print(f"❌ Publish hatası: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/published', methods=['GET'])
 def get_published():
     """Yayınlanan tabloyu getir"""
     print(f"👁️ Published isteği - Auth: {session.get('username', 'Yok')}")
-    if published_data is None:
-        return jsonify({'success': False, 'message': 'Henüz yayınlanmış tablo yok'}), 404
     
-    return jsonify({'success': True, 'data': published_data})
+    try:
+        conn = sqlite3.connect('nobet.db')
+        c = conn.cursor()
+        c.execute('SELECT data FROM published_tables ORDER BY created_at DESC LIMIT 1')
+        result = c.fetchone()
+        conn.close()
+        
+        if result is None:
+            return jsonify({'success': False, 'message': 'Henüz yayınlanmış tablo yok'}), 404
+        
+        data = json.loads(result[0])
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        print(f"❌ Get published hatası: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/create-nobet-listesi', methods=['POST'])
 def create_nobet_listesi():
