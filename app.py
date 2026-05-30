@@ -6,28 +6,30 @@ import io
 import os
 from datetime import datetime
 import json
-import sqlite3
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 
-print("🚀 APP.PY YÜKLENDI - VERİTABANI İLE!")
+print("🚀 APP.PY YÜKLENDI - MONGODB İLE!")
 
-# Veritabanı başlatma
-def init_db():
-    try:
-        conn = sqlite3.connect('nobet.db')
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS published_tables
-                     (id INTEGER PRIMARY KEY, data TEXT, created_at TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS physicians_data
-                     (id INTEGER PRIMARY KEY, data TEXT, created_at TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS app_settings
-                     (id INTEGER PRIMARY KEY, data TEXT, created_at TIMESTAMP)''')
-        conn.commit()
-        conn.close()
-        print("✅ Veritabanı hazırlandı")
-    except Exception as e:
-        print(f"⚠️ DB hata: {e}")
+# MongoDB Bağlantısı
+MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb+srv://nobet_user:Nobet2026Admin!@nobet-cluster.mongodb.net/nobet_db?retryWrites=true&w=majority')
 
-init_db()
+try:
+    client = MongoClient(MONGODB_URI)
+    db = client.nobet_db
+    
+    # Collections
+    published_col = db.published_tables
+    physicians_col = db.physicians_data
+    settings_col = db.app_settings
+    
+    # Indexes oluştur
+    published_col.create_index("created_at", expireAfterSeconds=7776000)  # 90 gün
+    
+    print("✅ MongoDB bağlantısı başarılı")
+except Exception as e:
+    print(f"❌ MongoDB bağlantı hatası: {e}")
+    db = None
 
 app = Flask(__name__, static_folder='.')
 app.secret_key = 'nobet-sistemi-secret-key-2026'  # Session için secret key
@@ -131,17 +133,15 @@ def publish():
     
     try:
         data = request.json
-        conn = sqlite3.connect('nobet.db')
-        c = conn.cursor()
         
-        # Son kaydı sil, yenisini ekle (tüm uygulamada tek tablo)
-        c.execute('DELETE FROM published_tables')
-        c.execute('INSERT INTO published_tables (data, created_at) VALUES (?, ?)',
-                  (json.dumps(data), datetime.now()))
-        conn.commit()
-        conn.close()
+        # Son kaydı sil, yenisini ekle
+        published_col.delete_many({})
+        published_col.insert_one({
+            'data': data,
+            'created_at': datetime.now()
+        })
         
-        print(f"✅ Tablo yayınlandı ve veritabanına kaydedildi!")
+        print(f"✅ Tablo yayınlandı ve MongoDB'ye kaydedildi!")
         return jsonify({'success': True, 'message': 'Tablo yayınlandı'})
     except Exception as e:
         print(f"❌ Publish hatası: {e}")
@@ -153,17 +153,14 @@ def get_published():
     print(f"👁️ Published isteği - Auth: {session.get('username', 'Yok')}")
     
     try:
-        conn = sqlite3.connect('nobet.db')
-        c = conn.cursor()
-        c.execute('SELECT data FROM published_tables ORDER BY created_at DESC LIMIT 1')
-        result = c.fetchone()
-        conn.close()
+        result = published_col.find_one({}, sort=[('created_at', -1)])
         
         if result is None:
             return jsonify({'success': False, 'message': 'Henüz yayınlanmış tablo yok'}), 404
         
-        data = json.loads(result[0])
-        return jsonify({'success': True, 'data': data})
+        # _id alanını kaldır (JSON serializable değil)
+        result.pop('_id', None)
+        return jsonify({'success': True, 'data': result['data']})
     except Exception as e:
         print(f"❌ Get published hatası: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -172,17 +169,13 @@ def get_published():
 def get_physicians():
     """Hekimleri getir"""
     try:
-        conn = sqlite3.connect('nobet.db')
-        c = conn.cursor()
-        c.execute('SELECT data FROM physicians_data ORDER BY created_at DESC LIMIT 1')
-        result = c.fetchone()
-        conn.close()
+        result = physicians_col.find_one({}, sort=[('created_at', -1)])
         
         if result is None:
             return jsonify({'success': False, 'message': 'Henüz hekim kaydı yok'}), 404
         
-        data = json.loads(result[0])
-        return jsonify({'success': True, 'data': data})
+        result.pop('_id', None)
+        return jsonify({'success': True, 'data': result['data']})
     except Exception as e:
         print(f"❌ Get physicians hatası: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -192,14 +185,12 @@ def save_physicians():
     """Hekimleri kaydet"""
     try:
         data = request.json
-        conn = sqlite3.connect('nobet.db')
-        c = conn.cursor()
         
-        c.execute('DELETE FROM physicians_data')
-        c.execute('INSERT INTO physicians_data (data, created_at) VALUES (?, ?)',
-                  (json.dumps(data), datetime.now()))
-        conn.commit()
-        conn.close()
+        physicians_col.delete_many({})
+        physicians_col.insert_one({
+            'data': data,
+            'created_at': datetime.now()
+        })
         
         print(f"✅ {len(data)} hekim kaydedildi")
         return jsonify({'success': True, 'message': 'Hekimler kaydedildi'})
@@ -211,17 +202,13 @@ def save_physicians():
 def get_settings():
     """Uygulama ayarlarını getir"""
     try:
-        conn = sqlite3.connect('nobet.db')
-        c = conn.cursor()
-        c.execute('SELECT data FROM app_settings ORDER BY created_at DESC LIMIT 1')
-        result = c.fetchone()
-        conn.close()
+        result = settings_col.find_one({}, sort=[('created_at', -1)])
         
         if result is None:
             return jsonify({'success': False, 'message': 'Henüz ayar kaydı yok'}), 404
         
-        data = json.loads(result[0])
-        return jsonify({'success': True, 'data': data})
+        result.pop('_id', None)
+        return jsonify({'success': True, 'data': result['data']})
     except Exception as e:
         print(f"❌ Get settings hatası: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -231,14 +218,12 @@ def save_settings():
     """Uygulama ayarlarını kaydet"""
     try:
         data = request.json
-        conn = sqlite3.connect('nobet.db')
-        c = conn.cursor()
         
-        c.execute('DELETE FROM app_settings')
-        c.execute('INSERT INTO app_settings (data, created_at) VALUES (?, ?)',
-                  (json.dumps(data), datetime.now()))
-        conn.commit()
-        conn.close()
+        settings_col.delete_many({})
+        settings_col.insert_one({
+            'data': data,
+            'created_at': datetime.now()
+        })
         
         print(f"✅ Ayarlar kaydedildi")
         return jsonify({'success': True, 'message': 'Ayarlar kaydedildi'})
