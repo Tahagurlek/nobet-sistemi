@@ -1209,8 +1209,6 @@
             // Physicians her değiştiğinde kaydet
             useEffect(() => {
                 localStorage.setItem('nobetSistemi_physicians', JSON.stringify(physicians));
-                // Cloud'a da kaydet
-                syncToCloud();
             }, [physicians]);
             
             // Schedule her değiştiğinde kaydet
@@ -1420,8 +1418,6 @@
                     color: '#' + Math.floor(Math.random()*16777215).toString(16)
                 };
                 setPhysicians([...physicians, newPhysician]);
-                // Cloud'a kaydet
-                setTimeout(() => syncToCloud(), 100);
             };
 
             const deletePhysician = (index) => {
@@ -1437,8 +1433,6 @@
                     
                     setSchedule(newSchedule);
                     setPhysicians(physicians.filter((_, i) => i !== index));
-                    // Cloud'a kaydet
-                    setTimeout(() => syncToCloud(), 100);
                 }
             };
 
@@ -2048,80 +2042,6 @@
                 }
             };
 
-            // Cloud Senkronizasyon Fonksiyonları
-            const syncToCloud = async () => {
-                try {
-                    // Tüm çalışma verilerini bir kez kaydet
-                    await fetch(`${API_URL}/api/working-data`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            physicians: physicians,
-                            schedule: schedule,
-                            holidays: holidays,
-                            year: selectedYear,
-                            month: selectedMonth,
-                            excuseColor: excuseColor
-                        })
-                    });
-                    
-                    console.log('✅ Tüm veriler cloud\'a kaydedildi');
-                } catch (err) {
-                    console.error('Cloud kayıt hatası:', err);
-                }
-            };
-
-            const loadFromCloud = async () => {
-                try {
-                    // Tüm çalışma verilerini yükle (hekimler, nöbetler, tatiller, ay, yıl)
-                    const dataResponse = await fetch(`${API_URL}/api/working-data`, {
-                        credentials: 'include'
-                    });
-                    
-                    if (dataResponse.ok) {
-                        const workingData = await dataResponse.json();
-                        if (workingData.success) {
-                            const data = workingData.data;
-                            
-                            // Tüm verileri state'e ve localStorage'a yaz
-                            setPhysicians(data.physicians);
-                            setSchedule(data.schedule);
-                            setHolidays(data.holidays);
-                            setSelectedYear(data.year);
-                            setSelectedMonth(data.month);
-                            
-                            // LocalStorage'a da yaz
-                            localStorage.setItem('nobetSistemi_physicians', JSON.stringify(data.physicians));
-                            localStorage.setItem('nobetSistemi_schedule', JSON.stringify(data.schedule));
-                            localStorage.setItem('nobetSistemi_holidays', JSON.stringify(data.holidays));
-                            localStorage.setItem('nobetSistemi_year', data.year.toString());
-                            localStorage.setItem('nobetSistemi_month', data.month.toString());
-                            
-                            console.log('✅ Tüm veriler cloud\'dan yüklendi!');
-                        }
-                    }
-                } catch (err) {
-                    console.error('Cloud yükleme hatası:', err);
-                    // Hata olursa localStorage'dan yükle (offline mode)
-                    console.log('📌 Local veriler kullanılıyor...');
-                }
-            };
-
-            // Sayfa yüklenince cloud'dan yükle
-            React.useEffect(() => {
-                loadFromCloud();
-            }, []);
-
-            // Keep-Alive: Render uyku modundan kaçmak için her 4 dakikada /health çağır
-            React.useEffect(() => {
-                const keepAlive = setInterval(() => {
-                    fetch(`${API_URL}/health`).catch(err => console.log('Keep-alive ping'));
-                }, 4 * 60 * 1000); // 4 dakika
-                
-                return () => clearInterval(keepAlive);
-            }, []);
-
             const publishSchedule = async () => {
                 if (!confirm('📢 Nöbet programını yayınlamak istiyor musunuz?\n\nYayınlanan program görüntüleme sayfasında herkes tarafından görülebilir olacak.')) {
                     return;
@@ -2245,10 +2165,7 @@
                                     <label>Ay Seçin</label>
                                     <select 
                                         value={selectedMonth}
-                                        onChange={(e) => {
-                                            setSelectedMonth(parseInt(e.target.value));
-                                            setHolidays([]);  // Ay değişince tatilleri sıfırla
-                                        }}
+                                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
                                     >
                                         {MONTHS.map((month, idx) => (
                                             <option key={idx} value={idx}>{month}</option>
