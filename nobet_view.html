@@ -225,15 +225,6 @@
                 checkAuthAndLoadData();
             }, []);
 
-            // Keep-Alive: Render uyku modundan kaçmak için her 4 dakikada /health çağır
-            useEffect(() => {
-                const keepAlive = setInterval(() => {
-                    fetch(`${API_URL}/health`).catch(err => console.log('Keep-alive ping'));
-                }, 4 * 60 * 1000); // 4 dakika
-                
-                return () => clearInterval(keepAlive);
-            }, []);
-
             const checkAuthAndLoadData = async () => {
                 try {
                     const authResponse = await fetch(`${API_URL}/api/check-auth`, {
