@@ -1475,6 +1475,9 @@
                 const physicianShiftCount = {};
                 const dailyPhysicians = {};
                 
+                // Mazeret kodları
+                const excuseCodes = ['YI', 'R', 'EV', 'EI', 'GO', 'MI', 'OI', 'RI', 'SEI', 'KI', 'IK', 'II', 'SI', 'B', 'I', 'X'];
+                
                 physicians.forEach(p => {
                     physicianHours[p.name] = 0;
                     physicianShiftCount[p.name] = 0;
@@ -1483,6 +1486,12 @@
 
                 Object.entries(schedule).forEach(([key, value]) => {
                     const [physician, day] = key.split('-');
+                    
+                    // Mazeret kodlarını hariç tut
+                    if (excuseCodes.includes(value)) {
+                        return; // Bu günü saymaz
+                    }
+                    
                     const shift = SHIFT_TYPES.find(s => s.value === value);
                     
                     if (shift && shift.hours > 0) {
