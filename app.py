@@ -5,6 +5,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 import io
 import os
 import re
+import sqlite3
 from datetime import datetime, timedelta
 import json
 from pymongo import MongoClient
@@ -14,10 +15,11 @@ print("🚀 APP.PY YÜKLENDI - MONGODB İLE!")
 
 # MongoDB Bağlantısı
 MONGODB_URI = os.environ.get('MONGODB_URI')
+USE_SQLITE = False
 
 if not MONGODB_URI:
-    print("❌ HATA: MONGODB_URI environment variable'ı ayarlanmamış!")
-    print("Render Dashboard → Environment → MONGODB_URI ekle")
+    print("⚠️  MONGODB_URI ayarlanmamış, SQLite fallback kullanılıyor")
+    USE_SQLITE = True
     db = None
 else:
     try:
@@ -38,11 +40,37 @@ else:
         
     except ServerSelectionTimeoutError as e:
         print(f"❌ MongoDB bağlantı hatası: {e}")
-        print("⚠️  MongoDB URI kontrolünü yapın")
+        print("⚠️  SQLite fallback'e geçiliyor")
+        USE_SQLITE = True
         db = None
     except Exception as e:
         print(f"❌ Beklenmeyen hata: {e}")
+        print("⚠️  SQLite fallback'e geçiliyor")
+        USE_SQLITE = True
         db = None
+
+# SQLite Fallback
+if USE_SQLITE:
+    DB_PATH = 'nobet.db'
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Tabloları oluştur
+    cursor.execute('''CREATE TABLE IF NOT EXISTS working_data (
+        id INTEGER PRIMARY KEY,
+        data TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS published_tables (
+        id INTEGER PRIMARY KEY,
+        data TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    
+    conn.commit()
+    print("✅ SQLite fallback hazır")
 
 app = Flask(__name__, static_folder='.')
 app.secret_key = 'nobet-sistemi-secret-key-2026'
@@ -104,36 +132,46 @@ def check_auth():
 
 @app.route('/api/working-data', methods=['GET'])
 def get_working_data():
-    """Çalışma verilerini getir (hekimler, nöbetler, tatiller, ay, yıl)"""
-    if not db:
-        return jsonify({'success': False, 'message': 'Database bağlantı hatası'}), 500
-    
+    """Çalışma verilerini getir (MongoDB veya SQLite)"""
     try:
-        result = db.working_data.find_one({}, sort=[('created_at', -1)])
-        
-        if result is None:
-            return jsonify({'success': False, 'message': 'Henüz veri yok'}), 404
-        
-        result.pop('_id', None)
-        return jsonify({'success': True, 'data': result['data']})
+        if not USE_SQLITE and db is not None:
+            # MongoDB
+            result = db.working_data.find_one({}, sort=[('created_at', -1)])
+            if result is None:
+                return jsonify({'success': False, 'message': 'Henüz veri yok'}), 404
+            result.pop('_id', None)
+            return jsonify({'success': True, 'data': result['data']})
+        else:
+            # SQLite Fallback
+            cursor.execute('SELECT data FROM working_data ORDER BY created_at DESC LIMIT 1')
+            result = cursor.fetchone()
+            if result is None:
+                return jsonify({'success': False, 'message': 'Henüz veri yok'}), 404
+            data = json.loads(result[0])
+            return jsonify({'success': True, 'data': data})
     except Exception as e:
         print(f"❌ Get working data: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/working-data', methods=['POST'])
 def save_working_data():
-    """Çalışma verilerini kaydet"""
-    if not db:
-        return jsonify({'success': False, 'message': 'Database bağlantı hatası'}), 500
-    
+    """Çalışma verilerini kaydet (MongoDB veya SQLite)"""
     try:
         data = request.json
         
-        db.working_data.delete_many({})
-        db.working_data.insert_one({
-            'data': data,
-            'created_at': datetime.now()
-        })
+        if not USE_SQLITE and db is not None:
+            # MongoDB
+            db.working_data.delete_many({})
+            db.working_data.insert_one({
+                'data': data,
+                'created_at': datetime.now()
+            })
+        else:
+            # SQLite Fallback
+            cursor.execute('DELETE FROM working_data')
+            cursor.execute('INSERT INTO working_data (data) VALUES (?)', 
+                          (json.dumps(data),))
+            conn.commit()
         
         print(f"✅ Çalışma verileri kaydedildi")
         return jsonify({'success': True})
@@ -143,21 +181,26 @@ def save_working_data():
 
 @app.route('/api/publish', methods=['POST'])
 def publish():
-    """Tabloyu yayınla"""
+    """Tabloyu yayınla (MongoDB veya SQLite)"""
     if session.get('role') != 'admin':
         return jsonify({'success': False, 'message': 'Yetkiniz yok'}), 403
-    
-    if not db:
-        return jsonify({'success': False, 'message': 'Database bağlantı hatası'}), 500
     
     try:
         data = request.json
         
-        db.published_tables.delete_many({})
-        db.published_tables.insert_one({
-            'data': data,
-            'created_at': datetime.now()
-        })
+        if not USE_SQLITE and db is not None:
+            # MongoDB
+            db.published_tables.delete_many({})
+            db.published_tables.insert_one({
+                'data': data,
+                'created_at': datetime.now()
+            })
+        else:
+            # SQLite Fallback
+            cursor.execute('DELETE FROM published_tables')
+            cursor.execute('INSERT INTO published_tables (data) VALUES (?)', 
+                          (json.dumps(data),))
+            conn.commit()
         
         print(f"✅ Tablo yayınlandı!")
         return jsonify({'success': True})
@@ -167,18 +210,23 @@ def publish():
 
 @app.route('/api/published', methods=['GET'])
 def get_published():
-    """Yayınlanan tabloyu getir"""
-    if not db:
-        return jsonify({'success': False, 'message': 'Database bağlantı hatası'}), 500
-    
+    """Yayınlanan tabloyu getir (MongoDB veya SQLite)"""
     try:
-        result = db.published_tables.find_one({}, sort=[('created_at', -1)])
-        
-        if result is None:
-            return jsonify({'success': False, 'message': 'Henüz yayınlanmış tablo yok'}), 404
-        
-        result.pop('_id', None)
-        return jsonify({'success': True, 'data': result['data']})
+        if not USE_SQLITE and db is not None:
+            # MongoDB
+            result = db.published_tables.find_one({}, sort=[('created_at', -1)])
+            if result is None:
+                return jsonify({'success': False, 'message': 'Henüz yayınlanmış tablo yok'}), 404
+            result.pop('_id', None)
+            return jsonify({'success': True, 'data': result['data']})
+        else:
+            # SQLite Fallback
+            cursor.execute('SELECT data FROM published_tables ORDER BY created_at DESC LIMIT 1')
+            result = cursor.fetchone()
+            if result is None:
+                return jsonify({'success': False, 'message': 'Henüz yayınlanmış tablo yok'}), 404
+            data = json.loads(result[0])
+            return jsonify({'success': True, 'data': data})
     except Exception as e:
         print(f"❌ Get published: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
