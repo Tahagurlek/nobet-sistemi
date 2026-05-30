@@ -225,6 +225,15 @@
                 checkAuthAndLoadData();
             }, []);
 
+            // Keep-Alive: Render uyku modundan kaçmak için her 4 dakikada /health çağır
+            useEffect(() => {
+                const keepAlive = setInterval(() => {
+                    fetch(`${API_URL}/health`).catch(err => console.log('Keep-alive ping'));
+                }, 4 * 60 * 1000); // 4 dakika
+                
+                return () => clearInterval(keepAlive);
+            }, []);
+
             const checkAuthAndLoadData = async () => {
                 try {
                     const authResponse = await fetch(`${API_URL}/api/check-auth`, {
@@ -319,7 +328,9 @@
                             <tbody>
                                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
                                     const date = new Date(year, month, day);
-                                    const isHoliday = holidays && holidays.includes(day);
+                                    // Holidays format: "ay-gün" (örn: "0-28")
+                                    const holidayKey = `${month}-${day}`;
+                                    const isHoliday = holidays && holidays.includes(holidayKey);
 
                                     return (
                                         <tr key={day} style={isHoliday ? {background: '#F3F4F6'} : {}}>
