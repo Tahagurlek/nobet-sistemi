@@ -1209,6 +1209,8 @@
             // Physicians her değiştiğinde kaydet
             useEffect(() => {
                 localStorage.setItem('nobetSistemi_physicians', JSON.stringify(physicians));
+                // Cloud'a da kaydet
+                syncToCloud();
             }, [physicians]);
             
             // Schedule her değiştiğinde kaydet
@@ -1418,6 +1420,8 @@
                     color: '#' + Math.floor(Math.random()*16777215).toString(16)
                 };
                 setPhysicians([...physicians, newPhysician]);
+                // Cloud'a kaydet
+                setTimeout(() => syncToCloud(), 100);
             };
 
             const deletePhysician = (index) => {
@@ -1433,6 +1437,8 @@
                     
                     setSchedule(newSchedule);
                     setPhysicians(physicians.filter((_, i) => i !== index));
+                    // Cloud'a kaydet
+                    setTimeout(() => syncToCloud(), 100);
                 }
             };
 
@@ -2042,6 +2048,59 @@
                 }
             };
 
+            // Cloud Senkronizasyon Fonksiyonları
+            const syncToCloud = async () => {
+                try {
+                    // Hekimleri kaydet
+                    await fetch(`${API_URL}/api/physicians`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(physicians)
+                    });
+                    
+                    // Ayarları kaydet
+                    await fetch(`${API_URL}/api/settings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            year: selectedYear,
+                            month: selectedMonth,
+                            excuseColor: excuseColor
+                        })
+                    });
+                    
+                    console.log('✅ Cloud\'a kaydedildi');
+                } catch (err) {
+                    console.error('Cloud kayıt hatası:', err);
+                }
+            };
+
+            const loadFromCloud = async () => {
+                try {
+                    // Hekimleri yükle
+                    const physResponse = await fetch(`${API_URL}/api/physicians`, {
+                        credentials: 'include'
+                    });
+                    if (physResponse.ok) {
+                        const physData = await physResponse.json();
+                        if (physData.success) {
+                            setPhysicians(physData.data);
+                            localStorage.setItem('nobetSistemi_physicians', JSON.stringify(physData.data));
+                            console.log('✅ Hekimler cloud\'dan yüklendi');
+                        }
+                    }
+                } catch (err) {
+                    console.error('Cloud yükleme hatası:', err);
+                }
+            };
+
+            // Sayfa yüklenince cloud'dan yükle
+            React.useEffect(() => {
+                loadFromCloud();
+            }, []);
+
             const publishSchedule = async () => {
                 if (!confirm('📢 Nöbet programını yayınlamak istiyor musunuz?\n\nYayınlanan program görüntüleme sayfasında herkes tarafından görülebilir olacak.')) {
                     return;
@@ -2165,7 +2224,10 @@
                                     <label>Ay Seçin</label>
                                     <select 
                                         value={selectedMonth}
-                                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                        onChange={(e) => {
+                                            setSelectedMonth(parseInt(e.target.value));
+                                            setHolidays([]);  // Ay değişince tatilleri sıfırla
+                                        }}
                                     >
                                         {MONTHS.map((month, idx) => (
                                             <option key={idx} value={idx}>{month}</option>
