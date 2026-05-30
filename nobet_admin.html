@@ -2051,27 +2051,22 @@
             // Cloud Senkronizasyon Fonksiyonları
             const syncToCloud = async () => {
                 try {
-                    // Hekimleri kaydet
-                    await fetch(`${API_URL}/api/physicians`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify(physicians)
-                    });
-                    
-                    // Ayarları kaydet
-                    await fetch(`${API_URL}/api/settings`, {
+                    // Tüm çalışma verilerini bir kez kaydet
+                    await fetch(`${API_URL}/api/working-data`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
                         body: JSON.stringify({
+                            physicians: physicians,
+                            schedule: schedule,
+                            holidays: holidays,
                             year: selectedYear,
                             month: selectedMonth,
                             excuseColor: excuseColor
                         })
                     });
                     
-                    console.log('✅ Cloud\'a kaydedildi');
+                    console.log('✅ Tüm veriler cloud\'a kaydedildi');
                 } catch (err) {
                     console.error('Cloud kayıt hatası:', err);
                 }
@@ -2079,20 +2074,37 @@
 
             const loadFromCloud = async () => {
                 try {
-                    // Hekimleri yükle
-                    const physResponse = await fetch(`${API_URL}/api/physicians`, {
+                    // Tüm çalışma verilerini yükle (hekimler, nöbetler, tatiller, ay, yıl)
+                    const dataResponse = await fetch(`${API_URL}/api/working-data`, {
                         credentials: 'include'
                     });
-                    if (physResponse.ok) {
-                        const physData = await physResponse.json();
-                        if (physData.success) {
-                            setPhysicians(physData.data);
-                            localStorage.setItem('nobetSistemi_physicians', JSON.stringify(physData.data));
-                            console.log('✅ Hekimler cloud\'dan yüklendi');
+                    
+                    if (dataResponse.ok) {
+                        const workingData = await dataResponse.json();
+                        if (workingData.success) {
+                            const data = workingData.data;
+                            
+                            // Tüm verileri state'e ve localStorage'a yaz
+                            setPhysicians(data.physicians);
+                            setSchedule(data.schedule);
+                            setHolidays(data.holidays);
+                            setSelectedYear(data.year);
+                            setSelectedMonth(data.month);
+                            
+                            // LocalStorage'a da yaz
+                            localStorage.setItem('nobetSistemi_physicians', JSON.stringify(data.physicians));
+                            localStorage.setItem('nobetSistemi_schedule', JSON.stringify(data.schedule));
+                            localStorage.setItem('nobetSistemi_holidays', JSON.stringify(data.holidays));
+                            localStorage.setItem('nobetSistemi_year', data.year.toString());
+                            localStorage.setItem('nobetSistemi_month', data.month.toString());
+                            
+                            console.log('✅ Tüm veriler cloud\'dan yüklendi!');
                         }
                     }
                 } catch (err) {
                     console.error('Cloud yükleme hatası:', err);
+                    // Hata olursa localStorage'dan yükle (offline mode)
+                    console.log('📌 Local veriler kullanılıyor...');
                 }
             };
 
