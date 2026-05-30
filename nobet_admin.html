@@ -677,15 +677,15 @@
         }
 
         .daily-indicator.good {
-            background: #D1FAE5;
-            color: #065F46;
-            border-color: #10B981;
+            background: #FEDDAA;
+            color: #92400E;
+            border-color: #F59E0B;
         }
 
         .daily-indicator.warning {
             background: #FEF3C7;
             color: #92400E;
-            border-color: #F59E0B;
+            border-color: #FBBF24;
         }
 
         .daily-indicator.danger {
@@ -2143,8 +2143,7 @@
             const getDailyIndicator = (count) => {
                 if (count === 0) return { text: '0', class: 'danger' };
                 if (count === 1) return { text: '1', class: 'warning' };
-                if (count === 2) return { text: '2', class: 'good' };
-                if (count >= 3) return { text: count.toString(), class: 'good' };
+                if (count >= 2) return { text: count.toString(), class: 'good' }; // 2+ turuncu
                 return { text: count.toString(), class: '' };
             };
 
@@ -2312,7 +2311,7 @@
                         <div className="legend">
                             <div className="legend-item">
                                 <span style={{color: '#6B7280', fontSize: '0.85rem'}}>
-                                    💡 Günlük Hekim Sayısı: <span className="daily-indicator good">2+</span> İyi | 
+                                    💡 Günlük Hekim Sayısı: <span className="daily-indicator good">2+</span> Orta | 
                                     <span className="daily-indicator warning" style={{margin: '0 0.25rem'}}>1</span> Az | 
                                     <span className="daily-indicator danger" style={{margin: '0 0.25rem'}}>0</span> Boş
                                 </span>
