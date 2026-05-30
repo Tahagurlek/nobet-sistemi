@@ -17,6 +17,10 @@ def init_db():
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS published_tables
                      (id INTEGER PRIMARY KEY, data TEXT, created_at TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS physicians_data
+                     (id INTEGER PRIMARY KEY, data TEXT, created_at TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS app_settings
+                     (id INTEGER PRIMARY KEY, data TEXT, created_at TIMESTAMP)''')
         conn.commit()
         conn.close()
         print("✅ Veritabanı hazırlandı")
@@ -164,7 +168,85 @@ def get_published():
         print(f"❌ Get published hatası: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/api/create-nobet-listesi', methods=['POST'])
+@app.route('/api/physicians', methods=['GET'])
+def get_physicians():
+    """Hekimleri getir"""
+    try:
+        conn = sqlite3.connect('nobet.db')
+        c = conn.cursor()
+        c.execute('SELECT data FROM physicians_data ORDER BY created_at DESC LIMIT 1')
+        result = c.fetchone()
+        conn.close()
+        
+        if result is None:
+            return jsonify({'success': False, 'message': 'Henüz hekim kaydı yok'}), 404
+        
+        data = json.loads(result[0])
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        print(f"❌ Get physicians hatası: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/physicians', methods=['POST'])
+def save_physicians():
+    """Hekimleri kaydet"""
+    try:
+        data = request.json
+        conn = sqlite3.connect('nobet.db')
+        c = conn.cursor()
+        
+        c.execute('DELETE FROM physicians_data')
+        c.execute('INSERT INTO physicians_data (data, created_at) VALUES (?, ?)',
+                  (json.dumps(data), datetime.now()))
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ {len(data)} hekim kaydedildi")
+        return jsonify({'success': True, 'message': 'Hekimler kaydedildi'})
+    except Exception as e:
+        print(f"❌ Save physicians hatası: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/settings', methods=['GET'])
+def get_settings():
+    """Uygulama ayarlarını getir"""
+    try:
+        conn = sqlite3.connect('nobet.db')
+        c = conn.cursor()
+        c.execute('SELECT data FROM app_settings ORDER BY created_at DESC LIMIT 1')
+        result = c.fetchone()
+        conn.close()
+        
+        if result is None:
+            return jsonify({'success': False, 'message': 'Henüz ayar kaydı yok'}), 404
+        
+        data = json.loads(result[0])
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        print(f"❌ Get settings hatası: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/settings', methods=['POST'])
+def save_settings():
+    """Uygulama ayarlarını kaydet"""
+    try:
+        data = request.json
+        conn = sqlite3.connect('nobet.db')
+        c = conn.cursor()
+        
+        c.execute('DELETE FROM app_settings')
+        c.execute('INSERT INTO app_settings (data, created_at) VALUES (?, ?)',
+                  (json.dumps(data), datetime.now()))
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Ayarlar kaydedildi")
+        return jsonify({'success': True, 'message': 'Ayarlar kaydedildi'})
+    except Exception as e:
+        print(f"❌ Save settings hatası: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 def create_nobet_listesi():
     """
     Nöbet listesi oluştur (otomatik template, renkli)
