@@ -1193,7 +1193,7 @@
                         console.error('Holidays yükleme hatası:', e);
                     }
                 }
-                return []; // Format: ["0-28", "1-14"] → Ocak 28, Şubat 14 (ay-gün)
+                return []; // Örn: [1, 23, 29] → 1. gün, 23. gün, 29. gün tatil
             });
             
             const [selectedYear, setSelectedYear] = useState(() => {
@@ -1503,9 +1503,7 @@
                 const minHours = Math.min(...Object.values(physicianHours).filter(h => h > 0), 999);
 
                 // FAZLA MESAİ HESAPLAMALARI
-                // Holidays format: "ay-gün", bu ayın tatillerini filtrele
-                const currentMonthHolidays = holidays.filter(h => h.startsWith(`${selectedMonth}-`)).length;
-                const mesaiGunleri = daysInMonth - currentMonthHolidays; // Toplam gün - Bu ayın tatil günleri
+                const mesaiGunleri = daysInMonth - holidays.length; // Toplam gün - Tatil günleri
                 const fazlaMesaiSuresiSiniri = mesaiGunleri * 8; // 8 saat × Mesai günü sayısı
                 const kurtaranNobetSayisi = Math.floor(fazlaMesaiSuresiSiniri / 24); // Sınır ÷ 24
                 
@@ -2155,7 +2153,10 @@
                                     <label>Yıl Seçin</label>
                                     <select 
                                         value={selectedYear}
-                                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                        onChange={(e) => {
+                                            setSelectedYear(parseInt(e.target.value));
+                                            setHolidays([]);  // Yıl değişince tatilleri sıfırla
+                                        }}
                                     >
                                         {[2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035].map(year => (
                                             <option key={year} value={year}>{year}</option>
@@ -2167,7 +2168,10 @@
                                     <label>Ay Seçin</label>
                                     <select 
                                         value={selectedMonth}
-                                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                        onChange={(e) => {
+                                            setSelectedMonth(parseInt(e.target.value));
+                                            setHolidays([]);  // Ay değişince tatilleri sıfırla
+                                        }}
                                     >
                                         {MONTHS.map((month, idx) => (
                                             <option key={idx} value={idx}>{month}</option>
@@ -2351,20 +2355,24 @@
                                         const indicator = getDailyIndicator(stats.dailyPhysicians[day] || 0);
                                         const isWeekendDay = isWeekend(selectedYear, selectedMonth, day);
                                         
-                                        // Tatil kontrolü: "ay-gün" formatında saklanıyor
-                                        // Örneğin: "0-28" = Ocak (ay=0) 28. gün
-                                        const holidayKey = `${selectedMonth}-${day}`;
-                                        const isInHolidays = holidays.includes(holidayKey);
+                                        // Tatil kontrolü: holidays array'inde var mı?
+                                        // Hafta sonları için özel mantık:
+                                        // - Hafta sonu + holidays'de YOK = Beyaz (çalışma günü yapılmış)
+                                        // - Hafta sonu + holidays'de VAR = Gri (tatil)
+                                        // - Hafta içi + holidays'de VAR = Gri (tatil)
+                                        // - Hafta içi + holidays'de YOK = Beyaz (çalışma günü)
+                                        
+                                        const isInHolidays = holidays.includes(day);
                                         const showAsHoliday = isInHolidays;
                                         
                                         // Tatil işaretleme fonksiyonu
                                         const toggleHoliday = () => {
                                             if (isInHolidays) {
-                                                // Tatilden çıkar
-                                                setHolidays(holidays.filter(h => h !== holidayKey));
+                                                // Tatilden çıkar (çalışma günü yap)
+                                                setHolidays(holidays.filter(d => d !== day));
                                             } else {
-                                                // Tatil yap
-                                                setHolidays([...holidays, holidayKey]);
+                                                // Tatil yap (holidays'e ekle)
+                                                setHolidays([...holidays, day]);
                                             }
                                         };
                                         
