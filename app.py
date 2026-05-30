@@ -9,7 +9,7 @@ import json
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 
-print("🚀 APP.PY YÜKLENDI - MONGODB İLE!")
+print("🚀 APP.PY YÜKLENDI - MONGODB İLE!!")
 
 # MongoDB Bağlantısı
 MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb+srv://nobet_user:Nobet2026Admin!@nobet-cluster.mongodb.net/nobet_db?retryWrites=true&w=majority')
