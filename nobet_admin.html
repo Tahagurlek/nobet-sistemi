@@ -1487,9 +1487,14 @@
                 Object.entries(schedule).forEach(([key, value]) => {
                     const [physician, day] = key.split('-');
                     
+                    // Boş/whitespace/null kontrolü
+                    if (!value || !value.trim()) {
+                        return; // Boş değerleri atla
+                    }
+                    
                     // Mazeret kodlarını hariç tut
                     if (excuseCodes.includes(value)) {
-                        return; // Bu günü saymaz
+                        return; // Mazeretleri saymaz
                     }
                     
                     const shift = SHIFT_TYPES.find(s => s.value === value);
@@ -1512,9 +1517,9 @@
                 const minHours = Math.min(...Object.values(physicianHours).filter(h => h > 0), 999);
 
                 // FAZLA MESAİ HESAPLAMALARI
-                const mesaiGunleri = daysInMonth - holidays.length; // Toplam gün - Tatil günleri
-                const fazlaMesaiSuresiSiniri = mesaiGunleri * 8; // 8 saat × Mesai günü sayısı
-                const kurtaranNobetSayisi = Math.floor(fazlaMesaiSuresiSiniri / 24); // Sınır ÷ 24
+                const mesaiGunleri = daysInMonth - holidays.length;
+                const fazlaMesaiSuresiSiniri = mesaiGunleri * 8;
+                const kurtaranNobetSayisi = Math.floor(fazlaMesaiSuresiSiniri / 24);
                 
                 // Her hekim için fazla mesai hesapla
                 const physicianFazlaMesai = {};
@@ -1527,7 +1532,7 @@
                 return { 
                     physicianHours, 
                     physicianShiftCount,
-                    physicianFazlaMesai,  // YENİ
+                    physicianFazlaMesai,
                     dailyPhysicians, 
                     totalHours, 
                     totalShifts,
@@ -1536,9 +1541,9 @@
                     avgDaily,
                     maxHours,
                     minHours: minHours === 999 ? 0 : minHours,
-                    mesaiGunleri,  // YENİ
-                    fazlaMesaiSuresiSiniri,  // YENİ
-                    kurtaranNobetSayisi  // YENİ
+                    mesaiGunleri,
+                    fazlaMesaiSuresiSiniri,
+                    kurtaranNobetSayisi
                 };
             }, [schedule, daysInMonth, physicians, holidays]);
 
@@ -2275,8 +2280,12 @@
                                 <button 
                                     className="btn btn-warning" 
                                     onClick={() => {
-                                        // Stats'ı yeniden hesaplamak için schedule'ı trigger et
-                                        setSchedule({...schedule});
+                                        // LocalStorage'dan yeniden yükle
+                                        const savedSchedule = localStorage.getItem('nobetSistemi_schedule');
+                                        if (savedSchedule) {
+                                            setSchedule(JSON.parse(savedSchedule));
+                                            alert('✅ Hesaplar yenilendi!\n\nStats yeniden hesaplanmıştır.');
+                                        }
                                     }}
                                     title="Hesaplamaları yeniden yap (tablo korunur)"
                                     style={{background: '#8B5CF6', color: 'white'}}
