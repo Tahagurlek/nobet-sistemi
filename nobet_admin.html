@@ -2253,16 +2253,10 @@
                                 <button 
                                     className="btn btn-warning" 
                                     onClick={() => {
-                                        if (confirm('Hesaplamaları sıfırlamak istediğinize emin misiniz? Tüm veriler yeniden hesaplanacak.')) {
-                                            localStorage.removeItem('nobetSistemi_schedule');
-                                            localStorage.removeItem('nobetSistemi_year');
-                                            localStorage.removeItem('nobetSistemi_month');
-                                            localStorage.removeItem('nobetSistemi_holidays');
-                                            localStorage.removeItem('nobetSistemi_excuse');
-                                            window.location.reload();
-                                        }
+                                        // Stats'ı yeniden hesaplamak için schedule'ı trigger et
+                                        setSchedule({...schedule});
                                     }}
-                                    title="Hesaplamaları sıfırlayıp sayfa yenile"
+                                    title="Hesaplamaları yeniden yap (tablo korunur)"
                                     style={{background: '#8B5CF6', color: 'white'}}
                                 >
                                     🔄 Hesapları Yenile
