@@ -231,8 +231,40 @@ def save_settings():
         print(f"❌ Save settings hatası: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@app.route('/api/working-data', methods=['GET'])
+def get_working_data():
+    """Çalışma verilerini getir (hekimler, nöbetler, tatiller, ay, yıl)"""
+    try:
+        result = db.working_data.find_one({}, sort=[('created_at', -1)])
+        
+        if result is None:
+            return jsonify({'success': False, 'message': 'Henüz çalışma verisi yok'}), 404
+        
+        result.pop('_id', None)
+        return jsonify({'success': True, 'data': result['data']})
+    except Exception as e:
+        print(f"❌ Get working data hatası: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
-def create_nobet_listesi():
+@app.route('/api/working-data', methods=['POST'])
+def save_working_data():
+    """Çalışma verilerini kaydet (hekimler, nöbetler, tatiller, ay, yıl)"""
+    try:
+        data = request.json
+        
+        db.working_data.delete_many({})
+        db.working_data.insert_one({
+            'data': data,
+            'created_at': datetime.now()
+        })
+        
+        print(f"✅ Çalışma verileri kaydedildi")
+        return jsonify({'success': True, 'message': 'Çalışma verileri kaydedildi'})
+    except Exception as e:
+        print(f"❌ Save working data hatası: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
     """
     Nöbet listesi oluştur (otomatik template, renkli)
     
