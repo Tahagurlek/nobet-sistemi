@@ -2057,7 +2057,9 @@
                 }
 
                 try {
-                    const response = await fetch(`${API_URL}/api/publish`, {
+                    // Önce tüm verileri MongoDB'ye kaydet
+                    console.log('💾 Çalışma verileri kaydediliyor...');
+                    const saveResponse = await fetch(`${API_URL}/api/working-data`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
@@ -2071,15 +2073,35 @@
                         })
                     });
 
-                    const data = await response.json();
+                    if (!saveResponse.ok) {
+                        throw new Error('Verileri kaydedemedi');
+                    }
+
+                    // Sonra yayınla
+                    console.log('📢 Tablo yayınlanıyor...');
+                    const publishResponse = await fetch(`${API_URL}/api/publish`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            physicians: physicians,
+                            schedule: schedule,
+                            year: selectedYear,
+                            month: selectedMonth,
+                            daysInMonth: daysInMonth,
+                            holidays: holidays
+                        })
+                    });
+
+                    const data = await publishResponse.json();
                     
                     if (data.success) {
-                        alert('✅ Nöbet programı başarıyla yayınlandı!\n\nPratisyenler artık görüntüleme sayfasından görebilir.');
+                        alert('✅ Başarılı!\n\n✓ Veriler kaydedildi (MongoDB)\n✓ Tablo yayınlandı\n\nPratisyenler görüntüleme sayfasından görebilir.');
                     } else {
                         alert('❌ Yayınlama başarısız: ' + (data.message || 'Bilinmeyen hata'));
                     }
                 } catch (err) {
-                    alert('❌ Bağlantı hatası: ' + err.message);
+                    alert('❌ Hata: ' + err.message);
                 }
             };
 
