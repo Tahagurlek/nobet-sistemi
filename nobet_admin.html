@@ -2113,6 +2113,15 @@
                 loadFromCloud();
             }, []);
 
+            // Keep-Alive: Render uyku modundan kaçmak için her 4 dakikada /health çağır
+            React.useEffect(() => {
+                const keepAlive = setInterval(() => {
+                    fetch(`${API_URL}/health`).catch(err => console.log('Keep-alive ping'));
+                }, 4 * 60 * 1000); // 4 dakika
+                
+                return () => clearInterval(keepAlive);
+            }, []);
+
             const publishSchedule = async () => {
                 if (!confirm('📢 Nöbet programını yayınlamak istiyor musunuz?\n\nYayınlanan program görüntüleme sayfasında herkes tarafından görülebilir olacak.')) {
                     return;
