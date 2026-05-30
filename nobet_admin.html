@@ -2252,6 +2252,23 @@
                                 </button>
                                 <button 
                                     className="btn btn-warning" 
+                                    onClick={() => {
+                                        if (confirm('Hesaplamaları sıfırlamak istediğinize emin misiniz? Tüm veriler yeniden hesaplanacak.')) {
+                                            localStorage.removeItem('nobetSistemi_schedule');
+                                            localStorage.removeItem('nobetSistemi_year');
+                                            localStorage.removeItem('nobetSistemi_month');
+                                            localStorage.removeItem('nobetSistemi_holidays');
+                                            localStorage.removeItem('nobetSistemi_excuse');
+                                            window.location.reload();
+                                        }
+                                    }}
+                                    title="Hesaplamaları sıfırlayıp sayfa yenile"
+                                    style={{background: '#8B5CF6', color: 'white'}}
+                                >
+                                    🔄 Hesapları Yenile
+                                </button>
+                                <button 
+                                    className="btn btn-warning" 
                                     onClick={publishSchedule}
                                     style={{background: '#F59E0B', color: 'white', fontWeight: '700'}}
                                 >
