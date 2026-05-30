@@ -32,7 +32,7 @@ else:
         client.admin.command('ping')
         db = client['nobet_db']
         
-        print("✅ MongoDB bağlantısı başarılı!")
+        print("✅ MongoDB bağlantısı başarılıı!")
         print(f"📊 Database: {db.name}")
         
     except ServerSelectionTimeoutError as e:
