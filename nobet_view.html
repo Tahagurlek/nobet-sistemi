@@ -238,6 +238,14 @@
             font-weight: 500;
         }
 
+        .day-count {
+            display: block;
+            font-size: 0.7rem;
+            color: #9CA3AF;
+            font-weight: 600;
+            margin-top: 0.2rem;
+        }
+
         /* Hücre */
         .schedule-cell {
             min-height: 50px;
@@ -307,6 +315,21 @@
             font-size: 0.85rem;
         }
 
+        .physician-stats {
+            display: flex;
+            gap: 0.3rem;
+            font-size: 0.7rem;
+            margin-top: 0.2rem;
+            justify-content: center;
+        }
+
+        .physician-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 0.1rem 0.4rem;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
         .physician-color-indicator {
             width: 20px;
             height: 4px;
@@ -337,6 +360,15 @@
 
             .day-header {
                 min-width: 70px;
+            }
+
+            .physician-stats {
+                gap: 0.2rem;
+            }
+
+            .physician-badge {
+                font-size: 0.65rem;
+                padding: 0.05rem 0.3rem;
             }
         }
 
@@ -377,12 +409,26 @@
                 font-size: 0.6rem;
             }
 
+            .day-count {
+                font-size: 0.65rem;
+            }
+
             .schedule-table tbody tr {
                 height: 45px;
             }
 
             .physician-name {
                 font-size: 0.75rem;
+            }
+
+            .physician-stats {
+                gap: 0.15rem;
+                margin-top: 0.1rem;
+            }
+
+            .physician-badge {
+                font-size: 0.6rem;
+                padding: 0.03rem 0.2rem;
             }
         }
     </style>
@@ -391,7 +437,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         const API_URL = '';
 
@@ -492,6 +538,45 @@
 
             const excuseCodes = ['YI', 'R', 'EV', 'EI', 'GO', 'MI', 'OI', 'RI', 'SEI', 'KI', 'IK', 'II', 'SI', 'B', 'I', 'X'];
 
+            // Stats hesapla
+            const stats = useMemo(() => {
+                const physicianShiftCount = {};
+                const physicianHours = {};
+                const dailyPhysicians = {};
+
+                physicians.forEach(physician => {
+                    physicianShiftCount[physician.name] = 0;
+                    physicianHours[physician.name] = 0;
+                });
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    dailyPhysicians[day] = 0;
+
+                    physicians.forEach(physician => {
+                        const key = `${physician.name}-${day}`;
+                        const value = schedule[key] || '';
+
+                        if (!excuseCodes.includes(value)) {
+                            if (value === '24') {
+                                physicianShiftCount[physician.name]++;
+                                physicianHours[physician.name] += 24;
+                                dailyPhysicians[day]++;
+                            } else if (value === '16') {
+                                physicianShiftCount[physician.name]++;
+                                physicianHours[physician.name] += 16;
+                                dailyPhysicians[day]++;
+                            } else if (value === '8') {
+                                physicianShiftCount[physician.name]++;
+                                physicianHours[physician.name] += 8;
+                                dailyPhysicians[day]++;
+                            }
+                        }
+                    });
+                }
+
+                return { physicianShiftCount, physicianHours, dailyPhysicians };
+            }, [schedule, physicians, daysInMonth]);
+
             const getDayName = (year, month, day) => {
                 const date = new Date(year, month, day);
                 const dayNames = ['PAZ', 'PTZ', 'SAL', 'ÇAR', 'PER', 'CUM', 'CMT'];
@@ -563,6 +648,14 @@
                                             <th key={physician.name} title={physician.name}>
                                                 <div className="physician-header">
                                                     <span className="physician-name">{physician.displayName}</span>
+                                                    <div className="physician-stats">
+                                                        <span className="physician-badge">
+                                                            {stats.physicianShiftCount[physician.name] || 0}×
+                                                        </span>
+                                                        <span className="physician-badge">
+                                                            {stats.physicianHours[physician.name] || 0}s
+                                                        </span>
+                                                    </div>
                                                     <div className="physician-color-indicator" style={{background: physician.color}}></div>
                                                 </div>
                                             </th>
@@ -572,12 +665,16 @@
                                 <tbody>
                                     {Array.from({length: daysInMonth}, (_, i) => i + 1).map(day => {
                                         const dayHeaderClass = `day-header ${isNonWorkDay(year, month, day) ? 'non-work' : ''}`;
+                                        const workingPhysicians = stats.dailyPhysicians[day] || 0;
 
                                         return (
                                             <tr key={day}>
                                                 <td className={dayHeaderClass}>
                                                     <span className="day-number">{day}</span>
                                                     <span className="day-name">{getDayName(year, month, day)}</span>
+                                                    {workingPhysicians > 0 && (
+                                                        <span className="day-count">{workingPhysicians}×</span>
+                                                    )}
                                                 </td>
                                                 {physicians.map(physician => {
                                                     const key = `${physician.name}-${day}`;
