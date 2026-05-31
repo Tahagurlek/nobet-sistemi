@@ -16,7 +16,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #F5F5F5;
             min-height: 100vh;
             padding: 1rem;
         }
@@ -29,8 +29,8 @@
         .header {
             background: white;
             padding: 1.5rem 2rem;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             margin-bottom: 1.5rem;
             display: flex;
             justify-content: space-between;
@@ -59,7 +59,7 @@
         .btn {
             padding: 0.625rem 1.25rem;
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
@@ -73,7 +73,6 @@
 
         .btn-logout:hover {
             background: #991B1B;
-            transform: translateY(-2px);
         }
 
         .btn-refresh {
@@ -83,24 +82,25 @@
 
         .btn-refresh:hover {
             background: #7C3AED;
-            transform: translateY(-2px);
         }
 
         .loading {
             text-align: center;
             padding: 3rem;
-            color: white;
+            color: #666;
             font-size: 1.1rem;
+            background: white;
+            border-radius: 12px;
         }
 
         .no-data {
             background: white;
             padding: 3rem;
-            border-radius: 16px;
+            border-radius: 12px;
             text-align: center;
             color: #6B7280;
             font-size: 1rem;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .no-data h2 {
@@ -109,70 +109,68 @@
             font-size: 1.2rem;
         }
 
-        /* Tablo Stilleri */
+        /* Tablo Wrapper */
         .table-wrapper {
             background: white;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
         }
 
-        .table-header {
-            padding: 1rem;
+        .table-title {
+            padding: 1rem 1.5rem;
             background: #F9FAFB;
-            border-bottom: 2px solid #E5E7EB;
-            color: #6B7280;
-            font-size: 0.85rem;
+            border-bottom: 1px solid #E5E7EB;
             font-weight: 600;
+            color: #1F2937;
         }
 
         .table-scroll {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
-            overflow-y: auto;
-            max-height: 70vh;
+            overflow-y: visible;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 900px;
         }
 
         thead {
             background: white;
             position: sticky;
             top: 0;
-            z-index: 20;
+            z-index: 10;
         }
 
         th {
-            padding: 1rem 0.5rem;
+            padding: 0.75rem 0.5rem;
             text-align: center;
-            font-weight: 600;
+            font-weight: 700;
             color: white;
-            font-size: 0.75rem;
-            border-bottom: 2px solid #E5E7EB;
-            word-break: break-word;
-            max-width: 80px;
+            font-size: 0.85rem;
+            border: 1px solid #DDD;
+            min-width: 70px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             line-height: 1.2;
+            word-wrap: break-word;
         }
 
         th:first-child {
-            min-width: 90px;
+            min-width: 100px;
             background: #F9FAFB;
             color: #1F2937;
-            text-align: left;
-            padding-left: 1rem;
+            font-weight: 600;
+            position: sticky;
+            left: 0;
+            z-index: 11;
         }
 
-        th:nth-child(n+2) {
+        tbody {
             background: white;
-            height: 80px;
-            vertical-align: bottom;
-            padding-bottom: 0.75rem;
         }
 
         tbody tr {
@@ -180,15 +178,16 @@
         }
 
         tbody tr:hover {
-            background: #F9FAFB;
+            background: #FAFAFA;
         }
 
         td {
-            padding: 0.75rem 0.5rem;
+            padding: 0;
             text-align: center;
             font-size: 0.9rem;
             color: #374151;
             border: 1px solid #E5E7EB;
+            min-width: 70px;
             height: 50px;
             display: flex;
             align-items: center;
@@ -197,74 +196,59 @@
 
         td:first-child {
             text-align: left;
-            padding-left: 1rem;
+            padding: 0 0.75rem;
             background: #F9FAFB;
             color: #1F2937;
             font-weight: 500;
             font-size: 0.85rem;
+            min-width: 100px;
+            position: sticky;
+            left: 0;
+            z-index: 10;
         }
 
-        /* Hücre Stilleri */
-        .cell-shift {
-            border-radius: 4px;
-            color: white;
-            font-weight: 600;
+        /* Hücre İçeriği */
+        .cell-content {
             width: 100%;
             height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
+            border-radius: 4px;
+            font-weight: 600;
         }
 
         .cell-empty {
             background: white;
+            color: transparent;
         }
 
         .cell-excuse {
             background: #D1D5DB;
+            color: #6B7280;
         }
 
-        /* Hekim Başlığı */
-        .physician-header {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.5rem;
+        .cell-shift-24 {
             color: white;
         }
 
-        .physician-name {
+        .cell-shift-16,
+        .cell-shift-8 {
+            color: white;
             font-weight: 700;
-            font-size: 0.8rem;
-            text-align: center;
-        }
-
-        .physician-color-indicator {
-            width: 16px;
-            height: 16px;
-            border-radius: 3px;
-            border: 2px solid rgba(255,255,255,0.5);
         }
 
         /* Info Banner */
         .info-banner {
             background: white;
             padding: 1rem 1.5rem;
-            border-radius: 16px;
+            border-radius: 12px;
             margin-bottom: 1.5rem;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-        }
-
-        .info-banner-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .month-year {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             font-weight: 700;
             color: #1F2937;
         }
@@ -272,96 +256,70 @@
         .month-year-subtitle {
             font-size: 0.85rem;
             color: #6B7280;
+            margin-top: 0.25rem;
         }
 
         /* Responsive */
         @media (max-width: 768px) {
-            body {
-                padding: 0.5rem;
-            }
-
             .header {
                 flex-direction: column;
                 align-items: flex-start;
+                padding: 1rem;
             }
 
-            .header-content h1 {
-                font-size: 1.2rem;
-            }
-
-            .table-scroll {
-                max-height: 60vh;
+            th {
+                min-width: 60px;
+                height: 50px;
+                font-size: 0.75rem;
             }
 
             th:first-child {
                 min-width: 80px;
-                padding-left: 0.75rem;
-            }
-
-            th:nth-child(n+2) {
-                max-width: 70px;
-                height: 70px;
             }
 
             td {
+                min-width: 60px;
                 height: 45px;
             }
 
-            .physician-name {
-                font-size: 0.7rem;
+            td:first-child {
+                min-width: 80px;
+                font-size: 0.8rem;
             }
         }
 
         @media (max-width: 480px) {
             body {
-                padding: 0.25rem;
+                padding: 0.5rem;
             }
 
             .header {
-                padding: 1rem;
+                padding: 0.75rem;
             }
 
             .header-content h1 {
-                font-size: 1rem;
-            }
-
-            .month-year {
                 font-size: 1.1rem;
             }
 
-            .table-scroll {
-                max-height: 50vh;
+            th {
+                min-width: 50px;
+                height: 45px;
+                font-size: 0.7rem;
             }
 
             th:first-child {
                 min-width: 70px;
-                font-size: 0.75rem;
-            }
-
-            th:nth-child(n+2) {
-                max-width: 60px;
-                height: 60px;
-                padding: 0.5rem 0.25rem;
             }
 
             td {
+                min-width: 50px;
                 height: 40px;
-                padding: 0.5rem 0.25rem;
                 font-size: 0.8rem;
             }
 
             td:first-child {
-                font-size: 0.8rem;
-                padding-left: 0.5rem;
-            }
-
-            .physician-name {
-                font-size: 0.65rem;
-            }
-
-            .physician-color-indicator {
-                width: 12px;
-                height: 12px;
+                min-width: 70px;
+                font-size: 0.75rem;
             }
         }
     </style>
@@ -472,7 +430,6 @@
             const days = Array.from({length: daysInMonth}, (_, i) => i + 1);
             const excuseCodes = ['YI', 'R', 'EV', 'EI', 'GO', 'MI', 'OI', 'RI', 'SEI', 'KI', 'IK', 'II', 'SI', 'B', 'I', 'X'];
 
-            // Tarihi format et
             const formatDate = (day) => {
                 const date = new Date(year, month, day);
                 const d = String(date.getDate()).padStart(2, '0');
@@ -501,18 +458,14 @@
 
                     {/* Info Banner */}
                     <div className="info-banner">
-                        <div className="info-banner-content">
-                            <div>
-                                <div className="month-year">{monthNames[month]} {year}</div>
-                                <div className="month-year-subtitle">Nöbet Programı</div>
-                            </div>
-                        </div>
+                        <div className="month-year">{monthNames[month]} {year} Nöbet Programı</div>
+                        <div className="month-year-subtitle">Nöbet Yönetim Sistemi</div>
                     </div>
 
                     {/* Tablo */}
                     <div className="table-wrapper">
-                        <div className="table-header">
-                            <span>📋 {monthNames[month]} {year} Nöbet Programı</span>
+                        <div className="table-title">
+                            📋 {monthNames[month]} {year} Nöbet Programı
                         </div>
                         <div className="table-scroll">
                             <table>
@@ -521,68 +474,52 @@
                                         <th>Tarih</th>
                                         {physicians.map(physician => (
                                             <th key={physician.name} style={{background: physician.color}}>
-                                                <div className="physician-header">
-                                                    <div className="physician-name">{physician.displayName}</div>
-                                                    <div className="physician-color-indicator" style={{background: physician.color}}></div>
-                                                </div>
+                                                {physician.displayName}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {days.map(day => {
-                                        const isHoliday = holidays.includes(day);
-                                        return (
-                                            <tr key={day}>
-                                                <td>{formatDate(day)}</td>
-                                                {physicians.map(physician => {
-                                                    const key = `${physician.name}-${day}`;
-                                                    const value = schedule[key] || '';
+                                    {days.map(day => (
+                                        <tr key={day}>
+                                            <td>{formatDate(day)}</td>
+                                            {physicians.map(physician => {
+                                                const key = `${physician.name}-${day}`;
+                                                const value = schedule[key] || '';
 
-                                                    let cellClass = 'cell-empty';
-                                                    let cellStyle = {};
-                                                    let cellContent = '';
+                                                let cellStyle = {};
+                                                let cellClass = 'cell-content cell-empty';
+                                                let cellContent = '';
 
-                                                    // Mazeret kontrolü
-                                                    if (excuseCodes.includes(value)) {
-                                                        cellClass = 'cell-excuse';
-                                                        cellContent = '';
-                                                    } 
-                                                    // 24 saat nöbet
-                                                    else if (value === '24') {
-                                                        cellClass = 'cell-shift';
-                                                        cellStyle = {background: physician.color, color: 'white'};
-                                                        cellContent = '';
-                                                    }
-                                                    // 16 saat nöbet
-                                                    else if (value === '16') {
-                                                        cellClass = 'cell-shift';
-                                                        cellStyle = {background: physician.color, color: 'white'};
-                                                        cellContent = '16';
-                                                    }
-                                                    // 8 saat nöbet
-                                                    else if (value === '8') {
-                                                        cellClass = 'cell-shift';
-                                                        cellStyle = {background: physician.color, color: 'white'};
-                                                        cellContent = '8';
-                                                    }
-                                                    // Boş gün
-                                                    else {
-                                                        cellClass = 'cell-empty';
-                                                        cellContent = '';
-                                                    }
+                                                if (excuseCodes.includes(value)) {
+                                                    cellClass = 'cell-content cell-excuse';
+                                                    cellContent = '';
+                                                } else if (value === '24') {
+                                                    cellClass = 'cell-content cell-shift-24';
+                                                    cellStyle = {background: physician.color};
+                                                    cellContent = '';
+                                                } else if (value === '16') {
+                                                    cellClass = 'cell-content cell-shift-16';
+                                                    cellStyle = {background: physician.color};
+                                                    cellContent = '16';
+                                                } else if (value === '8') {
+                                                    cellClass = 'cell-content cell-shift-8';
+                                                    cellStyle = {background: physician.color};
+                                                    cellContent = '8';
+                                                } else {
+                                                    cellClass = 'cell-content cell-empty';
+                                                }
 
-                                                    return (
-                                                        <td key={key} style={cellStyle}>
-                                                            <div className={cellClass}>
-                                                                {cellContent}
-                                                            </div>
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        );
-                                    })}
+                                                return (
+                                                    <td key={key}>
+                                                        <div className={cellClass} style={cellStyle}>
+                                                            {cellContent}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
