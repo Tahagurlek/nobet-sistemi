@@ -1138,6 +1138,32 @@
                     if (data.authenticated && data.role === 'admin') {
                         setIsAuthenticated(true);
                         setUser(data.username);
+                        
+                        // ✅ MongoDB'den çalışma verilerini yükle
+                        try {
+                            const workResponse = await fetch(`${API_URL}/api/working-data`, {
+                                credentials: 'include'
+                            });
+                            if (workResponse.ok) {
+                                const workData = await workResponse.json();
+                                if (workData.success && workData.data) {
+                                    // MongoDB'den gelen veriyi localStorage'a kaydet
+                                    const wd = workData.data;
+                                    if (wd.physicians) localStorage.setItem('nobetSistemi_physicians', JSON.stringify(wd.physicians));
+                                    if (wd.schedule) localStorage.setItem('nobetSistemi_schedule', JSON.stringify(wd.schedule));
+                                    if (wd.holidays) localStorage.setItem('nobetSistemi_holidays', JSON.stringify(wd.holidays));
+                                    if (wd.year) localStorage.setItem('nobetSistemi_year', wd.year.toString());
+                                    if (wd.month !== undefined) localStorage.setItem('nobetSistemi_month', wd.month.toString());
+                                    
+                                    console.log('✅ MongoDB veriler yüklendi');
+                                    // Sayfayı yenile (localStorage güncellenmiş)
+                                    window.location.reload();
+                                }
+                            }
+                        } catch (err) {
+                            console.warn('⚠️ MongoDB yüklenemedi, localStorage kullanılıyor:', err);
+                        }
+                        
                         setIsLoading(false);
                     } else {
                         // Admin değil veya oturum yok - login'e yönlendir
