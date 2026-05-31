@@ -110,8 +110,8 @@ def login():
     if user and user['password'] == password:
         session['username'] = username
         session['role'] = user['role']
-        print(f"✅ Giriş OK: {username}")
-        return jsonify({'success': True})
+        print(f"✅ Giriş OK: {username} (Role: {user['role']})")
+        return jsonify({'success': True, 'role': user['role']})
     
     return jsonify({'success': False, 'message': 'Geçersiz'}), 401
 
