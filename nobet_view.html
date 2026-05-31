@@ -437,7 +437,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect } = React;
 
         const API_URL = '';
 
@@ -539,43 +539,39 @@
             const excuseCodes = ['YI', 'R', 'EV', 'EI', 'GO', 'MI', 'OI', 'RI', 'SEI', 'KI', 'IK', 'II', 'SI', 'B', 'I', 'X'];
 
             // Stats hesapla
-            const stats = useMemo(() => {
-                const physicianShiftCount = {};
-                const physicianHours = {};
-                const dailyPhysicians = {};
+            const physicianShiftCount = {};
+            const physicianHours = {};
+            const dailyPhysicians = {};
+
+            physicians.forEach(physician => {
+                physicianShiftCount[physician.name] = 0;
+                physicianHours[physician.name] = 0;
+            });
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                dailyPhysicians[day] = 0;
 
                 physicians.forEach(physician => {
-                    physicianShiftCount[physician.name] = 0;
-                    physicianHours[physician.name] = 0;
-                });
+                    const key = `${physician.name}-${day}`;
+                    const value = schedule[key] || '';
 
-                for (let day = 1; day <= daysInMonth; day++) {
-                    dailyPhysicians[day] = 0;
-
-                    physicians.forEach(physician => {
-                        const key = `${physician.name}-${day}`;
-                        const value = schedule[key] || '';
-
-                        if (!excuseCodes.includes(value)) {
-                            if (value === '24') {
-                                physicianShiftCount[physician.name]++;
-                                physicianHours[physician.name] += 24;
-                                dailyPhysicians[day]++;
-                            } else if (value === '16') {
-                                physicianShiftCount[physician.name]++;
-                                physicianHours[physician.name] += 16;
-                                dailyPhysicians[day]++;
-                            } else if (value === '8') {
-                                physicianShiftCount[physician.name]++;
-                                physicianHours[physician.name] += 8;
-                                dailyPhysicians[day]++;
-                            }
+                    if (!excuseCodes.includes(value)) {
+                        if (value === '24') {
+                            physicianShiftCount[physician.name]++;
+                            physicianHours[physician.name] += 24;
+                            dailyPhysicians[day]++;
+                        } else if (value === '16') {
+                            physicianShiftCount[physician.name]++;
+                            physicianHours[physician.name] += 16;
+                            dailyPhysicians[day]++;
+                        } else if (value === '8') {
+                            physicianShiftCount[physician.name]++;
+                            physicianHours[physician.name] += 8;
+                            dailyPhysicians[day]++;
                         }
-                    });
-                }
-
-                return { physicianShiftCount, physicianHours, dailyPhysicians };
-            }, [schedule, physicians, daysInMonth]);
+                    }
+                });
+            }
 
             const getDayName = (year, month, day) => {
                 const date = new Date(year, month, day);
@@ -650,10 +646,10 @@
                                                     <span className="physician-name">{physician.displayName}</span>
                                                     <div className="physician-stats">
                                                         <span className="physician-badge">
-                                                            {stats.physicianShiftCount[physician.name] || 0}×
+                                                            {physicianShiftCount[physician.name] || 0}×
                                                         </span>
                                                         <span className="physician-badge">
-                                                            {stats.physicianHours[physician.name] || 0}s
+                                                            {physicianHours[physician.name] || 0}s
                                                         </span>
                                                     </div>
                                                     <div className="physician-color-indicator" style={{background: physician.color}}></div>
@@ -665,7 +661,7 @@
                                 <tbody>
                                     {Array.from({length: daysInMonth}, (_, i) => i + 1).map(day => {
                                         const dayHeaderClass = `day-header ${isNonWorkDay(year, month, day) ? 'non-work' : ''}`;
-                                        const workingPhysicians = stats.dailyPhysicians[day] || 0;
+                                        const workingPhysicians = dailyPhysicians[day] || 0;
 
                                         return (
                                             <tr key={day}>
