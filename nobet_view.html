@@ -11,8 +11,6 @@
         :root {
             --primary: #0F5061;
             --border: #E5E7EB;
-            --text: #374151;
-            --gray-light: #F3F4F6;
         }
 
         * {
@@ -149,13 +147,28 @@
 
         .schedule-table thead {
             position: sticky;
-            top: 0;
+            top: -1px;
             z-index: 200;
+            background: var(--primary);
+        }
+
+        .schedule-table thead tr {
+            position: relative;
+            z-index: 201;
+            background: var(--primary);
+        }
+
+        .schedule-table tbody {
+            position: relative;
+            margin-top: -1px;
         }
 
         .schedule-table tbody tr {
             height: 50px;
-            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .schedule-table tbody tr:first-child td {
+            border-top: none;
         }
 
         .schedule-table th {
@@ -164,38 +177,17 @@
             padding: 0.75rem 0.5rem;
             text-align: center;
             font-weight: 600;
-            min-width: 90px;
-            max-width: 110px;
+            min-width: 80px;
+            max-width: 100px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             position: relative;
             border: none;
+            border-left: none !important;
             z-index: 202;
-            word-wrap: break-word;
-            line-height: 1.2;
-        }
-
-        .physician-header {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.4rem;
-        }
-
-        .physician-name {
-            font-weight: 700;
-            font-size: 0.9rem;
-        }
-
-        .physician-color-indicator {
-            width: 24px;
-            height: 5px;
-            border-radius: 2px;
-            opacity: 0.9;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
         .schedule-table td {
-            padding: 2px;
+            padding: 0;
             border: 1px solid var(--border);
             text-align: center;
             background: white;
@@ -204,11 +196,17 @@
         }
 
         .schedule-table th:first-child {
+            border-top-left-radius: 12px;
             min-width: 80px;
             max-width: 80px;
             position: sticky;
             left: 0;
             z-index: 205;
+            background: var(--primary) !important;
+        }
+
+        .schedule-table th:last-child {
+            border-top-right-radius: 12px;
         }
 
         .day-header {
@@ -240,33 +238,37 @@
             font-weight: 500;
         }
 
-        /* Hücre İçeriği */
-        .cell-shift {
-            width: 100%;
-            height: 100%;
+        /* Hücre */
+        .schedule-cell {
+            min-height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
+            transition: all 0.2s;
+            padding: 0.3rem;
+            font-family: 'JetBrains Mono', monospace;
             font-weight: 700;
-            font-size: 0.9rem;
-        }
-
-        .cell-excuse {
+            font-size: 0.85rem;
+            position: relative;
+            z-index: 1;
             width: 100%;
             height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #D1D5DB;
-            color: #5A5A5A;
-            font-weight: 700;
-            font-size: 0.8rem;
-            border-radius: 3px;
+            margin: 0;
         }
 
-        .cell-empty {
-            background: white;
+        .schedule-cell:hover {
+            z-index: 2;
+        }
+
+        .schedule-cell.has-shift {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border-radius: 8px;
+        }
+
+        .schedule-cell.excuse {
+            background: #FEE2E2 !important;
+            color: #DC2626 !important;
+            font-weight: 700;
         }
 
         /* Info */
@@ -293,6 +295,25 @@
             color: #6B7280;
         }
 
+        .physician-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .physician-name {
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .physician-color-indicator {
+            width: 20px;
+            height: 4px;
+            border-radius: 2px;
+            opacity: 0.9;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .header {
@@ -316,20 +337,6 @@
 
             .day-header {
                 min-width: 70px;
-                font-size: 0.8rem;
-            }
-
-            .day-number {
-                font-size: 0.9rem;
-            }
-
-            .day-name {
-                font-size: 0.65rem;
-            }
-
-            .physician-color-indicator {
-                width: 20px;
-                height: 4px;
             }
         }
 
@@ -374,17 +381,8 @@
                 height: 45px;
             }
 
-            .cell-shift {
-                font-size: 0.75rem;
-            }
-
             .physician-name {
-                font-size: 0.8rem;
-            }
-
-            .physician-color-indicator {
-                width: 16px;
-                height: 3px;
+                font-size: 0.75rem;
             }
         }
     </style>
@@ -509,6 +507,24 @@
                 return isWeekend(year, month, day) || holidays.includes(day);
             };
 
+            const excuseNames = {
+                'YI': 'Yıllık İzin', 'I': 'Yıllık İzin',
+                'R': 'Raporlu',
+                'EV': 'Evlilik İzni',
+                'EI': 'Eğitim İzni',
+                'GO': 'Görevlendirme',
+                'MI': 'Mazeret İzni',
+                'OI': 'Ölüm İzni',
+                'RI': 'Refakat İzni',
+                'SEI': 'Sendika İzni',
+                'KI': 'Kongre İzni',
+                'IK': 'İş Kazası',
+                'II': 'İdari İzin',
+                'SI': 'Sevk İzin',
+                'B': 'Boşluk',
+                'X': 'Mazeret'
+            };
+
             return (
                 <div className="container">
                     {/* Header */}
@@ -544,7 +560,7 @@
                                     <tr>
                                         <th>Gün</th>
                                         {physicians.map(physician => (
-                                            <th key={physician.name} title={physician.name} style={{background: 'var(--primary)'}}>
+                                            <th key={physician.name} title={physician.name}>
                                                 <div className="physician-header">
                                                     <span className="physician-name">{physician.displayName}</span>
                                                     <div className="physician-color-indicator" style={{background: physician.color}}></div>
@@ -566,28 +582,37 @@
                                                 {physicians.map(physician => {
                                                     const key = `${physician.name}-${day}`;
                                                     const value = schedule[key] || '';
+                                                    const isExcuse = excuseCodes.includes(value);
 
-                                                    let cellContent = '';
-                                                    let cellClass = 'cell-empty';
                                                     let cellStyle = {};
+                                                    let cellContent = '';
 
-                                                    if (excuseCodes.includes(value)) {
-                                                        // Tüm mazeretler gri (B dahil)
-                                                        cellClass = 'cell-excuse';
+                                                    if (isExcuse) {
+                                                        cellStyle = {
+                                                            background: '#FEE2E2',
+                                                            color: '#DC2626'
+                                                        };
                                                         cellContent = value === 'B' ? '' : value;
-                                                    } else if (value === '24') {
-                                                        cellClass = 'cell-shift';
-                                                        cellStyle = {background: physician.color};
-                                                        cellContent = '';
-                                                    } else if (value === '16' || value === '8') {
-                                                        cellClass = 'cell-shift';
-                                                        cellStyle = {background: physician.color};
+                                                    } else if (value && !excuseCodes.includes(value)) {
+                                                        const opacity = value === '24' ? '1' : value === '16' ? '0.8' : '0.6';
+                                                        cellStyle = {
+                                                            background: physician.color,
+                                                            color: 'white',
+                                                            opacity: opacity
+                                                        };
                                                         cellContent = value;
                                                     }
 
+                                                    const tooltipText = isExcuse ? (excuseNames[value] || 'Mazeret') : '';
+                                                    const cellClass = `schedule-cell ${value && !isExcuse && value !== 'X' ? 'has-shift' : ''} ${isExcuse || value === 'X' ? 'excuse' : ''}`;
+
                                                     return (
-                                                        <td key={key} style={cellStyle}>
-                                                            <div className={cellClass}>
+                                                        <td key={key}>
+                                                            <div 
+                                                                className={cellClass}
+                                                                style={cellStyle}
+                                                                title={tooltipText}
+                                                            >
                                                                 {cellContent}
                                                             </div>
                                                         </td>
