@@ -195,6 +195,17 @@
             z-index: 1;
         }
 
+        .schedule-table tbody td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 100;
+            background: white;
+        }
+
+        .schedule-table tbody td:first-child.non-work {
+            background: #E8EAED;
+        }
+
         .schedule-table th:first-child {
             border-top-left-radius: 12px;
             min-width: 80px;
@@ -210,6 +221,7 @@
         }
 
         .day-header {
+            z-index: 100;
             font-weight: 600;
             padding: 0.4rem 0.35rem;
             min-width: 80px;
@@ -359,6 +371,7 @@
             }
 
             .day-header {
+            z-index: 100;
                 min-width: 70px;
             }
 
@@ -397,6 +410,7 @@
             }
 
             .day-header {
+            z-index: 100;
                 min-width: 60px;
                 padding: 0.3rem 0.2rem;
             }
