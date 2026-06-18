@@ -1495,7 +1495,26 @@
             };
 
             const updatePhysician = (index, field, value) => {
+                const oldPhysician = physicians[index];
                 const newPhysicians = [...physicians];
+                
+                // Hekim adı değişiyorsa, schedule'da eski adla yapılan nöbetleri yeni ada taşı
+                if (field === 'name' && oldPhysician.name !== value) {
+                    const oldName = oldPhysician.name;
+                    const newName = value;
+                    
+                    const newSchedule = { ...schedule };
+                    Object.keys(schedule).forEach(key => {
+                        if (key.startsWith(`${oldName}-`)) {
+                            const day = key.split('-')[1];
+                            const newKey = `${newName}-${day}`;
+                            newSchedule[newKey] = schedule[key];
+                            delete newSchedule[key];
+                        }
+                    });
+                    setSchedule(newSchedule);
+                }
+                
                 newPhysicians[index][field] = value;
                 setPhysicians(newPhysicians);
             };
