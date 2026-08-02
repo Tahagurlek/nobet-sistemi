@@ -512,6 +512,23 @@ def create_puantaj():
         # HEKİMLERİ DOĞRUDAN YAZ (Satır 4'ten başlayarak)
         start_row = 4
         
+        # Türkçe harfleri büyük harfe çevirme fonksiyonu
+        def to_upper_turkish(text):
+            """Türkçe harfleri doğru şekilde büyültür"""
+            turkish_map = {
+                'i': 'İ',
+                'ş': 'Ş',
+                'ç': 'Ç',
+                'ğ': 'Ğ',
+                'ü': 'Ü',
+                'ö': 'Ö'
+            }
+            text = text.upper()  # Önce standart upper
+            # Sonra Türkçe harfleri düzelt
+            for lower, upper in turkish_map.items():
+                text = text.replace(lower, upper)
+            return text
+        
         print(f"\n=== HEKİM YAZMA BAŞLIYOR ===")
         for index, physician in enumerate(physicians_sorted):
             row = start_row + index
@@ -526,8 +543,8 @@ def create_puantaj():
             ws.cell(row=row, column=2).value = tc
             print(f"  B{row} = {tc}")
             
-            # C sütunu: Adı Soyadı (BÜYÜK HARFLER)
-            name_upper = physician['name'].upper()
+            # C sütunu: Adı Soyadı (BÜYÜK HARFLER - TÜRKÇE)
+            name_upper = to_upper_turkish(physician['name'])
             ws.cell(row=row, column=3).value = name_upper
             print(f"  C{row} = {name_upper}")
             
