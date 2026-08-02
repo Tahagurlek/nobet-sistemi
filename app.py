@@ -457,12 +457,20 @@ def create_puantaj():
         days_in_month = data.get('daysInMonth', 31)
         holidays = data.get('holidays', [])  # YENİ: Tatil günleri
         
+        # DEBUG: GELENVERİ
+        print(f"\n=== PUANTAJ DEBUG ===")
+        print(f"Physicians sayısı: {len(physicians)}")
+        for i, p in enumerate(physicians[:3]):  # İlk 3'ü yazdır
+            print(f"  [{i}] {p.get('name')} - title: '{p.get('title')}' - displayName: '{p.get('displayName')}'")
+        print(f"Schedule sayısı: {len(schedule)}")
+        
         # HEKİMLERİ SIRALA: UZM.DR. önce, sonra TABİP
         def sort_key(physician):
             title = physician.get('title', '').lower()
             # UZM.DR. olanlar önce (0), TABİP olanlar sonra (1)
             # "Uzm.Dr", "uzm.dr", "UZM.DR" hepsini yakala
             is_specialist = 'uzm' in title
+            print(f"  SORT: {physician.get('name')} - title='{physician.get('title')}' - is_specialist={is_specialist}")
             return (0 if is_specialist else 1, physician.get('name', ''))
         
         physicians_sorted = sorted(physicians, key=sort_key)
