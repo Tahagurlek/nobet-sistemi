@@ -38,6 +38,19 @@ else:
         print("✅ MongoDB bağlantısı başarılı!")
         print(f"📊 Database: {db.name}")
         
+        # İndexleri oluştur
+        try:
+            db.working_data.create_index([('created_at', 1)])
+            print("✅ working_data index oluşturuldu")
+        except:
+            pass
+        
+        try:
+            db.published_tables.create_index([('created_at', 1)])
+            print("✅ published_tables index oluşturuldu")
+        except:
+            pass
+        
     except ServerSelectionTimeoutError as e:
         print(f"❌ MongoDB bağlantı hatası: {e}")
         print("⚠️  SQLite fallback'e geçiliyor")
@@ -155,25 +168,35 @@ def get_working_data():
 
 @app.route('/api/working-data', methods=['POST'])
 def save_working_data():
-    """Çalışma verilerini kaydet (MongoDB veya SQLite)"""
+    """Çalışma verilerini kaydet (MongoDB veya SQLite) - OPTIMIZE EDİLMİŞ"""
     try:
         data = request.json
         
+        # Gereksiz alanları kaldır (storage optimize)
+        clean_data = {
+            'physicians': data.get('physicians', []),
+            'schedule': data.get('schedule', {}),
+            'holidays': data.get('holidays', []),
+            'year': data.get('year'),
+            'month': data.get('month'),
+            'daysInMonth': data.get('daysInMonth')
+        }
+        
         if not USE_SQLITE and db is not None:
-            # MongoDB
+            # MongoDB - eski'leri sil, yeni'yi kaydet
             db.working_data.delete_many({})
             db.working_data.insert_one({
-                'data': data,
+                'data': clean_data,
                 'created_at': datetime.now()
             })
         else:
             # SQLite Fallback
             cursor.execute('DELETE FROM working_data')
             cursor.execute('INSERT INTO working_data (data) VALUES (?)', 
-                          (json.dumps(data),))
+                          (json.dumps(clean_data),))
             conn.commit()
         
-        print(f"✅ Çalışma verileri kaydedildi")
+        print(f"✅ Çalışma verileri kaydedildi (optimize)")
         return jsonify({'success': True})
     except Exception as e:
         print(f"❌ Save working data: {e}")
@@ -229,6 +252,38 @@ def get_published():
             return jsonify({'success': True, 'data': data})
     except Exception as e:
         print(f"❌ Get published: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/cleanup-database', methods=['POST'])
+def cleanup_database():
+    """MongoDB'yi temizle - SADECE ESKİ PUBLISHED'LARI SİL (ADMIN ONLY)"""
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'Yetkiniz yok'}), 403
+    
+    try:
+        if not USE_SQLITE and db is not None:
+            # ⚠️  UYARI: working_data ASLA silinmez!
+            # Sadece eski published_tables'ları sil (son 1'i tut)
+            
+            all_published = list(db.published_tables.find().sort('created_at', -1))
+            
+            deleted_count = 0
+            if len(all_published) > 1:
+                # Son 1 haricinde hepsini sil
+                for doc in all_published[1:]:
+                    db.published_tables.delete_one({'_id': doc['_id']})
+                    deleted_count += 1
+            
+            working_count = db.working_data.count_documents({})
+            published_count = db.published_tables.count_documents({})
+            
+            message = f"✅ Eski published tabloları temizlendi!\n🔒 working_data korundu ({working_count} kopya)\n📊 Kalan: {published_count} published"
+            print(message)
+            return jsonify({'success': True, 'message': message, 'deleted': deleted_count})
+        else:
+            return jsonify({'success': False, 'message': 'SQLite kullanılıyor'}), 400
+    except Exception as e:
+        print(f"❌ Cleanup hatası: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 # ================== EXCEL ENDPOINTS ==================
@@ -402,11 +457,22 @@ def create_puantaj():
         days_in_month = data.get('daysInMonth', 31)
         holidays = data.get('holidays', [])  # YENİ: Tatil günleri
         
+        # HEKİMLERİ SIRALA: UZM.DR. önce, sonra TABİP
+        def sort_key(physician):
+            title = physician.get('title', '').upper()
+            # UZM.DR. olanlar önce (0), TABİP olanlar sonra (1)
+            if 'UZM' in title or 'UZMAN' in title:
+                return (0, physician.get('name', ''))
+            else:
+                return (1, physician.get('name', ''))
+        
+        physicians_sorted = sorted(physicians, key=sort_key)
+        
         # DEBUG
         print(f"\n=== PUANTAJ OLUŞTURMA ===")
-        print(f"Physicians sayısı: {len(physicians)}")
-        if physicians:
-            print(f"İlk hekim: {physicians[0]}")
+        print(f"Physicians sayısı: {len(physicians_sorted)}")
+        if physicians_sorted:
+            print(f"İlk hekim: {physicians_sorted[0]}")
         print(f"Schedule sayısı: {len(schedule)}")
         
         # A1 hücresini güncelle (ay/yıl bilgisi varsa)
@@ -440,7 +506,7 @@ def create_puantaj():
         start_row = 4
         
         print(f"\n=== HEKİM YAZMA BAŞLIYOR ===")
-        for index, physician in enumerate(physicians):
+        for index, physician in enumerate(physicians_sorted):
             row = start_row + index
             print(f"\nSatır {row} - Hekim {index+1}:")
             
@@ -453,14 +519,19 @@ def create_puantaj():
             ws.cell(row=row, column=2).value = tc
             print(f"  B{row} = {tc}")
             
-            # C sütunu: Adı Soyadı
-            ws.cell(row=row, column=3).value = physician['name']
-            print(f"  C{row} = {physician['name']}")
+            # C sütunu: Adı Soyadı (BÜYÜK HARFLER)
+            name_upper = physician['name'].upper()
+            ws.cell(row=row, column=3).value = name_upper
+            print(f"  C{row} = {name_upper}")
             
-            # D sütunu: Ünvan (Branş)
-            title = physician.get('title', 'Uzm.Dr')
-            ws.cell(row=row, column=4).value = title
-            print(f"  D{row} = {title}")
+            # D sütunu: Ünvan (Branş) - TABİP veya UZM.DR.
+            title = physician.get('title', '').upper()
+            if 'UZM' in title or 'UZMAN' in title:
+                branch = 'UZM.DR.'
+            else:
+                branch = 'TABİP'
+            ws.cell(row=row, column=4).value = branch
+            print(f"  D{row} = {branch}")
             
             # E-AI sütunları (5-35): Nöbet saatleri (günler 1-31)
             for day in range(1, days_in_month + 1):
