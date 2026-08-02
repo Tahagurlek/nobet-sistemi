@@ -459,12 +459,11 @@ def create_puantaj():
         
         # HEKİMLERİ SIRALA: UZM.DR. önce, sonra TABİP
         def sort_key(physician):
-            title = physician.get('title', '').upper()
+            title = physician.get('title', '').lower()
             # UZM.DR. olanlar önce (0), TABİP olanlar sonra (1)
-            if 'UZM' in title or 'UZMAN' in title:
-                return (0, physician.get('name', ''))
-            else:
-                return (1, physician.get('name', ''))
+            # "Uzm.Dr", "uzm.dr", "UZM.DR" hepsini yakala
+            is_specialist = 'uzm' in title
+            return (0 if is_specialist else 1, physician.get('name', ''))
         
         physicians_sorted = sorted(physicians, key=sort_key)
         
@@ -525,8 +524,9 @@ def create_puantaj():
             print(f"  C{row} = {name_upper}")
             
             # D sütunu: Ünvan (Branş) - TABİP veya UZM.DR.
-            title = physician.get('title', '').upper()
-            if 'UZM' in title or 'UZMAN' in title:
+            title = physician.get('title', '').lower()
+            # "Uzm.Dr", "uzm.dr", "UZM.DR" hepsini yakala
+            if 'uzm' in title:
                 branch = 'UZM.DR.'
             else:
                 branch = 'TABİP'
