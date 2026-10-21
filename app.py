@@ -3,6 +3,7 @@ from flask_cors import CORS
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 import io
+import hmac
 import os
 import re
 import sqlite3
@@ -86,7 +87,8 @@ if USE_SQLITE:
     print("✅ SQLite fallback hazır")
 
 app = Flask(__name__, static_folder='.')
-app.secret_key = 'nobet-sistemi-secret-key-2026'
+# Secret key ortam değişkeninden gelir (kodda tutulmaz)
+app.secret_key = os.environ.get('SECRET_KEY') or __import__('secrets').token_hex(32)
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
@@ -100,11 +102,17 @@ def after_request(response):
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return response
 
-# Kullanıcılar
-USERS = {
-    'admin': {'password': 'admin123', 'role': 'admin'},
-    'pratisyen': {'password': 'prat123', 'role': 'user'}
-}
+# Kullanıcılar: şifreler ORTAM DEĞİŞKENLERİNDEN okunur, kodda tutulmaz.
+#   ADMIN_PASSWORD  -> yönetici (admin) şifresi
+#   USER_PASSWORD   -> pratisyen (görüntüleme) şifresi
+# Bu değişkenler ayarlanmamışsa ilgili hesap KAPALIDIR (giriş yapılamaz).
+USERS = {}
+if os.environ.get('ADMIN_PASSWORD'):
+    USERS['admin'] = {'password': os.environ['ADMIN_PASSWORD'], 'role': 'admin'}
+if os.environ.get('USER_PASSWORD'):
+    USERS['pratisyen'] = {'password': os.environ['USER_PASSWORD'], 'role': 'user'}
+if not USERS:
+    print("⚠️  ADMIN_PASSWORD / USER_PASSWORD ayarlanmamış: giriş kapalı")
 
 # ================== AUTH ENDPOINTS ==================
 
@@ -120,7 +128,7 @@ def login():
     password = data.get('password')
     
     user = USERS.get(username)
-    if user and user['password'] == password:
+    if user and password and hmac.compare_digest(user['password'], str(password)):
         session['username'] = username
         session['role'] = user['role']
         print(f"✅ Giriş OK: {username} (Role: {user['role']})")
