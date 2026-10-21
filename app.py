@@ -1,803 +1,416 @@
-from flask import Flask, request, jsonify, send_file, session, send_from_directory
-from flask_cors import CORS
-import openpyxl
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-import io
+"""Acil Servis Nöbet Sistemi — Flask sunucusu.
+
+Ortam değişkenleri:
+  MONGODB_URI      MongoDB Atlas bağlantısı (yoksa yerel SQLite kullanılır: sadece geliştirme için)
+  ADMIN_PASSWORD   yönetici (admin) şifresi
+  USER_PASSWORD    pratisyen (görüntüleme) şifresi
+  SECRET_KEY       oturum anahtarı
+  INSECURE_COOKIES=1  yerel http testinde çerezlerin çalışması için
+"""
 import hmac
+import json
 import os
 import re
+import secrets
 import sqlite3
-from datetime import datetime, timedelta
-import json
-from pymongo import MongoClient
-from pymongo.errors import ServerSelectionTimeoutError
+import threading
+import time
+from datetime import datetime, timezone
+from functools import wraps
 
-print("🚀 APP.PY YÜKLENDI - MONGODB İLE!")
+from flask import Flask, jsonify, redirect, request, send_file, send_from_directory, session
 
-# MongoDB Bağlantısı
-MONGODB_URI = os.environ.get('MONGODB_URI')
-USE_SQLITE = False
+import exports
+import model
 
-if not MONGODB_URI:
-    print("⚠️  MONGODB_URI ayarlanmamış, SQLite fallback kullanılıyor")
-    USE_SQLITE = True
-    db = None
-else:
-    try:
-        client = MongoClient(
-            MONGODB_URI,
-            serverSelectionTimeoutMS=10000,
-            connectTimeoutMS=10000,
-            socketTimeoutMS=10000,
-            retryWrites=True
-        )
-        
-        # Bağlantı test et
-        client.admin.command('ping')
-        db = client['nobet_db']
-        
-        print("✅ MongoDB bağlantısı başarılı!")
-        print(f"📊 Database: {db.name}")
-        
-        # İndexleri oluştur
-        try:
-            db.working_data.create_index([('created_at', 1)])
-            print("✅ working_data index oluşturuldu")
-        except:
-            pass
-        
-        try:
-            db.published_tables.create_index([('created_at', 1)])
-            print("✅ published_tables index oluşturuldu")
-        except:
-            pass
-        
-    except ServerSelectionTimeoutError as e:
-        print(f"❌ MongoDB bağlantı hatası: {e}")
-        print("⚠️  SQLite fallback'e geçiliyor")
-        USE_SQLITE = True
-        db = None
-    except Exception as e:
-        print(f"❌ Beklenmeyen hata: {e}")
-        print("⚠️  SQLite fallback'e geçiliyor")
-        USE_SQLITE = True
-        db = None
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PUBLIC_DIR = os.path.join(BASE_DIR, 'public')
 
-# SQLite Fallback
-if USE_SQLITE:
-    DB_PATH = 'nobet.db'
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    # Tabloları oluştur
-    cursor.execute('''CREATE TABLE IF NOT EXISTS working_data (
-        id INTEGER PRIMARY KEY,
-        data TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS published_tables (
-        id INTEGER PRIMARY KEY,
-        data TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    conn.commit()
-    print("✅ SQLite fallback hazır")
+app = Flask(__name__, static_folder=None)
+app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('INSECURE_COOKIES') != '1',
+    SESSION_COOKIE_HTTPONLY=True,
+    MAX_CONTENT_LENGTH=4 * 1024 * 1024,
+)
 
-app = Flask(__name__, static_folder='.')
-# Secret key ortam değişkeninden gelir (kodda tutulmaz)
-app.secret_key = os.environ.get('SECRET_KEY') or __import__('secrets').token_hex(32)
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-
-@app.after_request
-def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
-
-# Kullanıcılar: şifreler ORTAM DEĞİŞKENLERİNDEN okunur, kodda tutulmaz.
-#   ADMIN_PASSWORD  -> yönetici (admin) şifresi
-#   USER_PASSWORD   -> pratisyen (görüntüleme) şifresi
-# Bu değişkenler ayarlanmamışsa ilgili hesap KAPALIDIR (giriş yapılamaz).
+# ================== KULLANICILAR ==================
+# Şifreler ortam değişkenlerinden okunur; ayarlanmamış hesap kapalıdır.
 USERS = {}
 if os.environ.get('ADMIN_PASSWORD'):
     USERS['admin'] = {'password': os.environ['ADMIN_PASSWORD'], 'role': 'admin'}
 if os.environ.get('USER_PASSWORD'):
     USERS['pratisyen'] = {'password': os.environ['USER_PASSWORD'], 'role': 'user'}
 if not USERS:
-    print("⚠️  ADMIN_PASSWORD / USER_PASSWORD ayarlanmamış: giriş kapalı")
+    print('⚠️  ADMIN_PASSWORD / USER_PASSWORD ayarlanmamış: giriş kapalı')
 
-# ================== AUTH ENDPOINTS ==================
 
+# ================== DEPOLAMA ==================
+class Conflict(Exception):
+    """Veri başka bir cihazda değişmiş (revizyon uyuşmuyor)."""
+
+
+class StorageUnavailable(Exception):
+    pass
+
+
+class MongoStore:
+    def __init__(self, uri):
+        from pymongo import MongoClient
+        from pymongo import errors
+        self.errors = errors
+        # Bağlantı tembeldir: ilk istekte kurulur, koparsa sonraki istekte yeniden denenir.
+        self.client = MongoClient(uri, serverSelectionTimeoutMS=8000, connectTimeoutMS=8000,
+                                  socketTimeoutMS=15000, retryWrites=True)
+        self.db = self.client['nobet_db']
+        self.col = self.db['app_state']
+
+    def _wrap(self, fn):
+        try:
+            return fn()
+        except self.errors.PyMongoError as e:
+            print('❌ MongoDB hatası: %s' % e)
+            raise StorageUnavailable(str(e))
+
+    def load(self, name):
+        doc = self._wrap(lambda: self.col.find_one({'_id': name}))
+        return (doc['data'], doc['rev']) if doc else (None, 0)
+
+    def save(self, name, data, base_rev):
+        now = datetime.now(timezone.utc)
+        if base_rev == 0:
+            try:
+                self.col.insert_one({'_id': name, 'data': data, 'rev': 1, 'updated_at': now})
+            except self.errors.DuplicateKeyError:
+                raise Conflict()
+            except self.errors.PyMongoError as e:
+                raise StorageUnavailable(str(e))
+            return 1
+        res = self._wrap(lambda: self.col.update_one(
+            {'_id': name, 'rev': base_rev},
+            {'$set': {'data': data, 'rev': base_rev + 1, 'updated_at': now}}))
+        if res.matched_count == 0:
+            raise Conflict()
+        return base_rev + 1
+
+    def put(self, name, data):
+        self._wrap(lambda: self.col.update_one(
+            {'_id': name}, {'$set': {'data': data, 'updated_at': datetime.now(timezone.utc)},
+                            '$inc': {'rev': 1}}, upsert=True))
+
+    def list_prefix(self, prefix):
+        docs = self._wrap(lambda: list(self.col.find({'_id': {'$regex': '^' + re.escape(prefix)}})))
+        return [d['data'] for d in docs]
+
+    def legacy(self, collection):
+        doc = self._wrap(lambda: self.db[collection].find_one({}, sort=[('created_at', -1)]))
+        return doc.get('data') if doc else None
+
+
+class SqliteStore:
+    """Sadece yerel geliştirme için. Render'da disk kalıcı değildir."""
+
+    def __init__(self, path):
+        self.lock = threading.Lock()
+        self.conn = sqlite3.connect(path, check_same_thread=False)
+        self.conn.execute('CREATE TABLE IF NOT EXISTS app_state '
+                          '(name TEXT PRIMARY KEY, data TEXT, rev INTEGER, updated_at TEXT)')
+        self.conn.commit()
+
+    def load(self, name):
+        with self.lock:
+            row = self.conn.execute('SELECT data, rev FROM app_state WHERE name=?', (name,)).fetchone()
+        return (json.loads(row[0]), row[1]) if row else (None, 0)
+
+    def save(self, name, data, base_rev):
+        now = datetime.now(timezone.utc).isoformat()
+        with self.lock:
+            if base_rev == 0:
+                try:
+                    self.conn.execute('INSERT INTO app_state VALUES (?,?,1,?)',
+                                      (name, json.dumps(data), now))
+                except sqlite3.IntegrityError:
+                    raise Conflict()
+                self.conn.commit()
+                return 1
+            cur = self.conn.execute('UPDATE app_state SET data=?, rev=?, updated_at=? '
+                                    'WHERE name=? AND rev=?',
+                                    (json.dumps(data), base_rev + 1, now, name, base_rev))
+            self.conn.commit()
+            if cur.rowcount == 0:
+                raise Conflict()
+            return base_rev + 1
+
+    def put(self, name, data):
+        now = datetime.now(timezone.utc).isoformat()
+        with self.lock:
+            self.conn.execute('INSERT INTO app_state VALUES (?,?,1,?) ON CONFLICT(name) DO UPDATE '
+                              'SET data=excluded.data, rev=app_state.rev+1, updated_at=excluded.updated_at',
+                              (name, json.dumps(data), now))
+            self.conn.commit()
+
+    def list_prefix(self, prefix):
+        with self.lock:
+            rows = self.conn.execute('SELECT data FROM app_state WHERE name LIKE ?',
+                                     (prefix.replace('%', '') + '%',)).fetchall()
+        return [json.loads(r[0]) for r in rows]
+
+    def legacy(self, collection):
+        return None
+
+
+if os.environ.get('MONGODB_URI'):
+    store = MongoStore(os.environ['MONGODB_URI'])
+    print('🗄️  Depolama: MongoDB')
+else:
+    store = SqliteStore(os.path.join(BASE_DIR, 'nobet_local.db'))
+    print('🗄️  Depolama: yerel SQLite (MONGODB_URI yok — sadece geliştirme)')
+
+WORKING = 'working'
+PUBLISHED_PREFIX = 'published:'
+
+
+def load_working():
+    data, rev = store.load(WORKING)
+    if data is None:
+        # İlk açılış: eski sürümün verisi varsa yeni yapıya taşı
+        legacy = store.legacy('working_data')
+        doc = model.migrate_legacy(legacy) if legacy else model.default_doc()
+        try:
+            rev = store.save(WORKING, doc, 0)
+        except Conflict:
+            data, rev = store.load(WORKING)
+            return model.normalize(data), rev
+        print('✅ Çalışma verisi oluşturuldu%s' % (' (eski veriden taşındı)' if legacy else ''))
+        return doc, rev
+    return model.normalize(data), rev
+
+
+def published_all():
+    snaps = {s['ym']: s for s in store.list_prefix(PUBLISHED_PREFIX) if s.get('ym')}
+    if not snaps:
+        legacy = store.legacy('published_tables')
+        if legacy:
+            doc = model.migrate_legacy(legacy)
+            for ym in doc['months']:
+                snaps[ym] = make_snapshot(doc, ym, published_at=None)
+    return snaps
+
+
+def make_snapshot(doc, ym, published_at):
+    return {
+        'version': 2,
+        'ym': ym,
+        'publishedAt': published_at,
+        'settings': doc['settings'],
+        'physicians': model.month_physicians(doc, ym),
+        'month': model.get_month(doc, ym),
+    }
+
+
+# ================== DOĞRULAMA ==================
+YM_RE = re.compile(r'^\d{4}-(0[1-9]|1[0-2])$')
+KEY_RE = re.compile(r'^[A-Za-z0-9_]+-([1-9]|[12]\d|3[01])$')
+
+
+def validate_doc(doc):
+    if not isinstance(doc, dict):
+        raise ValueError('Veri biçimi hatalı')
+    phys = doc.get('physicians')
+    if not isinstance(phys, list) or len(phys) > 200:
+        raise ValueError('Hekim listesi hatalı')
+    ids = set()
+    for p in phys:
+        if not isinstance(p, dict) or not isinstance(p.get('id'), str) or not isinstance(p.get('name'), str):
+            raise ValueError('Hekim kaydı hatalı')
+        if not re.fullmatch(r'[A-Za-z0-9_]{1,40}', p['id']) or p['id'] in ids:
+            raise ValueError('Hekim kimliği hatalı')
+        ids.add(p['id'])
+        if not re.fullmatch(r'#[0-9A-Fa-f]{6}', p.get('color') or ''):
+            raise ValueError('Renk hatalı: %s' % p['name'])
+    months = doc.get('months')
+    if not isinstance(months, dict):
+        raise ValueError('Ay verisi hatalı')
+    for ym, m in months.items():
+        if not YM_RE.match(ym) or not isinstance(m, dict):
+            raise ValueError('Ay hatalı: %s' % ym)
+        sched = m.get('schedule', {})
+        if not isinstance(sched, dict):
+            raise ValueError('Çizelge hatalı')
+        for k, v in sched.items():
+            if not KEY_RE.match(k) or not isinstance(v, str) or len(v) > 8:
+                raise ValueError('Çizelge hücresi hatalı')
+        hol = m.get('holidays', [])
+        if not isinstance(hol, list) or not all(isinstance(d, int) and 1 <= d <= 31 for d in hol):
+            raise ValueError('Tatil listesi hatalı')
+    settings = doc.get('settings')
+    if not isinstance(settings, dict):
+        raise ValueError('Ayarlar hatalı')
+    doc = model.normalize(doc)
+    for key, val in doc['settings']['colors'].items():
+        if not re.fullmatch(r'#[0-9A-Fa-f]{6}', str(val)):
+            raise ValueError('Renk ayarı hatalı: %s' % key)
+    excuses = doc['settings']['excuses']
+    if not isinstance(excuses, list) or not all(
+            isinstance(e, dict) and re.fullmatch(r'[A-ZÇĞİÖŞÜ]{1,4}', str(e.get('code', '')))
+            for e in excuses):
+        raise ValueError('Mazeret kodları hatalı (1-4 büyük harf)')
+    return doc
+
+
+# ================== YARDIMCILAR ==================
+def require(role=None):
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*a, **kw):
+            if 'role' not in session:
+                return jsonify({'success': False, 'message': 'Oturum kapalı'}), 401
+            if role and session['role'] != role:
+                return jsonify({'success': False, 'message': 'Yetkiniz yok'}), 403
+            try:
+                return fn(*a, **kw)
+            except StorageUnavailable:
+                return jsonify({'success': False,
+                                'message': 'Veritabanına ulaşılamıyor. Biraz sonra tekrar deneyin.'}), 503
+        return wrapper
+    return deco
+
+
+_failed = {}
+
+
+def _too_many_attempts(ip):
+    now = time.time()
+    attempts = [t for t in _failed.get(ip, []) if now - t < 300]
+    _failed[ip] = attempts
+    return len(attempts) >= 10
+
+
+# ================== AUTH ==================
 @app.route('/health', methods=['GET', 'HEAD'])
 def health():
-    """Keep-Alive ping"""
-    return jsonify({'status': 'ok', 'mongodb': db is not None})
+    return jsonify({'status': 'ok'})
+
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+    if _too_many_attempts(ip):
+        return jsonify({'success': False, 'message': 'Çok fazla deneme. 5 dakika sonra tekrar deneyin.'}), 429
+    data = request.get_json(silent=True) or {}
+    username = str(data.get('username') or '')
+    password = str(data.get('password') or '')
     user = USERS.get(username)
-    if user and password and hmac.compare_digest(user['password'], str(password)):
+    if user and password and hmac.compare_digest(user['password'], password):
+        session.clear()
         session['username'] = username
         session['role'] = user['role']
-        print(f"✅ Giriş OK: {username} (Role: {user['role']})")
         return jsonify({'success': True, 'role': user['role']})
-    
-    return jsonify({'success': False, 'message': 'Geçersiz'}), 401
+    _failed.setdefault(ip, []).append(time.time())
+    return jsonify({'success': False, 'message': 'Kullanıcı adı veya şifre hatalı'}), 401
+
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
     session.clear()
     return jsonify({'success': True})
 
+
 @app.route('/api/check-auth', methods=['GET'])
 def check_auth():
-    return jsonify({
-        'authenticated': 'username' in session,
-        'username': session.get('username'),
-        'role': session.get('role')
-    })
+    if 'role' in session:
+        return jsonify({'authenticated': True, 'username': session['username'], 'role': session['role']})
+    return jsonify({'authenticated': False})
 
-# ================== MONGODB ENDPOINTS ==================
 
+# ================== VERİ ==================
 @app.route('/api/working-data', methods=['GET'])
-def get_working_data():
-    """Çalışma verilerini getir (MongoDB veya SQLite)"""
-    try:
-        if not USE_SQLITE and db is not None:
-            # MongoDB
-            result = db.working_data.find_one({}, sort=[('created_at', -1)])
-            if result is None:
-                return jsonify({'success': False, 'message': 'Henüz veri yok'}), 404
-            result.pop('_id', None)
-            return jsonify({'success': True, 'data': result['data']})
-        else:
-            # SQLite Fallback
-            cursor.execute('SELECT data FROM working_data ORDER BY created_at DESC LIMIT 1')
-            result = cursor.fetchone()
-            if result is None:
-                return jsonify({'success': False, 'message': 'Henüz veri yok'}), 404
-            data = json.loads(result[0])
-            return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        print(f"❌ Get working data: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+@require('admin')
+def get_working():
+    doc, rev = load_working()
+    return jsonify({'success': True, 'data': doc, 'rev': rev, 'published': published_all()})
+
 
 @app.route('/api/working-data', methods=['POST'])
-def save_working_data():
-    """Çalışma verilerini kaydet (MongoDB veya SQLite) - OPTIMIZE EDİLMİŞ"""
+@require('admin')
+def save_working():
+    body = request.get_json(silent=True) or {}
     try:
-        data = request.json
-        
-        # Gereksiz alanları kaldır (storage optimize)
-        clean_data = {
-            'physicians': data.get('physicians', []),
-            'schedule': data.get('schedule', {}),
-            'holidays': data.get('holidays', []),
-            'year': data.get('year'),
-            'month': data.get('month'),
-            'daysInMonth': data.get('daysInMonth')
-        }
-        
-        if not USE_SQLITE and db is not None:
-            # MongoDB - eski'leri sil, yeni'yi kaydet
-            db.working_data.delete_many({})
-            db.working_data.insert_one({
-                'data': clean_data,
-                'created_at': datetime.now()
-            })
-        else:
-            # SQLite Fallback
-            cursor.execute('DELETE FROM working_data')
-            cursor.execute('INSERT INTO working_data (data) VALUES (?)', 
-                          (json.dumps(clean_data),))
-            conn.commit()
-        
-        print(f"✅ Çalışma verileri kaydedildi (optimize)")
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"❌ Save working data: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        doc = validate_doc(body.get('data'))
+        base_rev = int(body.get('baseRev', -1))
+    except (ValueError, TypeError) as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    try:
+        rev = store.save(WORKING, doc, base_rev)
+    except Conflict:
+        current, cur_rev = load_working()
+        return jsonify({'success': False, 'conflict': True, 'data': current, 'rev': cur_rev,
+                        'message': 'Veri başka bir cihazda değiştirilmiş'}), 409
+    return jsonify({'success': True, 'rev': rev})
+
 
 @app.route('/api/publish', methods=['POST'])
+@require('admin')
 def publish():
-    """Tabloyu yayınla (MongoDB veya SQLite)"""
-    if session.get('role') != 'admin':
-        return jsonify({'success': False, 'message': 'Yetkiniz yok'}), 403
-    
-    try:
-        data = request.json
-        
-        if not USE_SQLITE and db is not None:
-            # MongoDB
-            db.published_tables.delete_many({})
-            db.published_tables.insert_one({
-                'data': data,
-                'created_at': datetime.now()
-            })
-        else:
-            # SQLite Fallback
-            cursor.execute('DELETE FROM published_tables')
-            cursor.execute('INSERT INTO published_tables (data) VALUES (?)', 
-                          (json.dumps(data),))
-            conn.commit()
-        
-        print(f"✅ Tablo yayınlandı!")
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"❌ Publish hatası: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+    ym = str((request.get_json(silent=True) or {}).get('ym') or '')
+    if not YM_RE.match(ym):
+        return jsonify({'success': False, 'message': 'Geçersiz ay'}), 400
+    doc, _ = load_working()
+    snap = make_snapshot(doc, ym, datetime.now(timezone.utc).isoformat())
+    store.put(PUBLISHED_PREFIX + ym, snap)
+    return jsonify({'success': True, 'snapshot': snap})
+
 
 @app.route('/api/published', methods=['GET'])
+@require()
 def get_published():
-    """Yayınlanan tabloyu getir (MongoDB veya SQLite)"""
-    try:
-        if not USE_SQLITE and db is not None:
-            # MongoDB
-            result = db.published_tables.find_one({}, sort=[('created_at', -1)])
-            if result is None:
-                return jsonify({'success': False, 'message': 'Henüz yayınlanmış tablo yok'}), 404
-            result.pop('_id', None)
-            return jsonify({'success': True, 'data': result['data']})
-        else:
-            # SQLite Fallback
-            cursor.execute('SELECT data FROM published_tables ORDER BY created_at DESC LIMIT 1')
-            result = cursor.fetchone()
-            if result is None:
-                return jsonify({'success': False, 'message': 'Henüz yayınlanmış tablo yok'}), 404
-            data = json.loads(result[0])
-            return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        print(f"❌ Get published: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@app.route('/api/cleanup-database', methods=['POST'])
-def cleanup_database():
-    """MongoDB'yi temizle - SADECE ESKİ PUBLISHED'LARI SİL (ADMIN ONLY)"""
-    if session.get('role') != 'admin':
-        return jsonify({'success': False, 'message': 'Yetkiniz yok'}), 403
-    
-    try:
-        if not USE_SQLITE and db is not None:
-            # ⚠️  UYARI: working_data ASLA silinmez!
-            # Sadece eski published_tables'ları sil (son 1'i tut)
-            
-            all_published = list(db.published_tables.find().sort('created_at', -1))
-            
-            deleted_count = 0
-            if len(all_published) > 1:
-                # Son 1 haricinde hepsini sil
-                for doc in all_published[1:]:
-                    db.published_tables.delete_one({'_id': doc['_id']})
-                    deleted_count += 1
-            
-            working_count = db.working_data.count_documents({})
-            published_count = db.published_tables.count_documents({})
-            
-            message = f"✅ Eski published tabloları temizlendi!\n🔒 working_data korundu ({working_count} kopya)\n📊 Kalan: {published_count} published"
-            print(message)
-            return jsonify({'success': True, 'message': message, 'deleted': deleted_count})
-        else:
-            return jsonify({'success': False, 'message': 'SQLite kullanılıyor'}), 400
-    except Exception as e:
-        print(f"❌ Cleanup hatası: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-# ================== EXCEL ENDPOINTS ==================
-
-@app.route('/api/create-nobet-listesi', methods=['POST'])
-def create_nobet_listesi():
-    """
-    Nöbet listesi oluştur (otomatik template, renkli)
-    
-    Form Data:
-    - data: JSON string (physicians, schedule, year, month, daysInMonth, excuseColor)
-    
-    Returns: Excel dosyası
-    """
-    try:
-        # JSON data'yı al
-        import json
-        data = json.loads(request.form.get('data', '{}'))
-        
-        # TEMPLATE'İ BACKEND'DEN YÜK (kullanıcı yüklemesin)
-        template_path = os.path.join(os.path.dirname(__file__), 'templates', 'nobetprogramirenkli.xlsx')
-        if not os.path.exists(template_path):
-            return jsonify({'error': 'Nöbet listesi template bulunamadı!'}), 500
-        
-        wb = openpyxl.load_workbook(template_path)
-        ws = wb.active
-        
-        physicians = data.get('physicians', [])
-        schedule = data.get('schedule', {})
-        year = data.get('year', 2026)
-        month = data.get('month', 0)
-        days_in_month = data.get('daysInMonth', 31)
-        excuse_color = data.get('excuseColor', 'A9A9A9')  # Varsayılan gri
-        holidays = data.get('holidays', [])  # YENİ: Tatil günleri listesi
-        
-        month_names = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN',
-                      'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK']
-        
-        # SATIR 9'A HEKİM BAŞLIKLARINI DOĞRUDAN YAZ (Uygulamadan gelen sırayla)
-        header_row = 9
-        
-        for index, physician in enumerate(physicians):
-            col = 3 + index  # C, D, E, F... sütunları
-            cell = ws.cell(row=header_row, column=col)
-            
-            # Hekim kısa adını yaz
-            cell.value = physician['displayName']
-            
-            # Hekim rengi ile boya
-            hex_color = physician['color'].replace('#', '')
-            cell.fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type='solid')
-        
-        # Satır 10'dan başlayarak günleri doldur
-        from datetime import datetime, timedelta
-        start_date = datetime(year, month + 1, 1)
-        
-        for day in range(1, days_in_month + 1):
-            row = 9 + day  # Satır 10, 11, 12...
-            current_date = start_date + timedelta(days=day - 1)
-            
-            # A sütunu: Tarih
-            ws.cell(row=row, column=1).value = current_date
-            
-            # B sütunu: Gün adı
-            day_names = ['PAZARTESİ', 'SALI', 'ÇARŞAMBA', 'PERŞEMBE', 'CUMA', 'CUMARTESİ', 'PAZAR']
-            day_name_cell = ws.cell(row=row, column=2)
-            day_name_cell.value = day_names[current_date.weekday()]
-            
-            # Tatil kontrolü: SADECE holidays listesinde varsa gri yap
-            is_holiday = day in holidays  # Frontend'den gelen tatil günleri
-            
-            if is_holiday:
-                day_name_cell.fill = PatternFill(start_color='D1D5DB', end_color='D1D5DB', fill_type='solid')
-            
-            # Hekim sütunları: Nöbet saatleri + Renkler (Uygulamadaki sırayla)
-            for index, physician in enumerate(physicians):
-                col = 3 + index  # C, D, E, F...
-                key = f"{physician['name']}-{day}"
-                value = schedule.get(key, '')
-                
-                cell = ws.cell(row=row, column=col)
-                
-                # Renk ve değer belirleme
-                # MAZERET TİPLERİ LİSTESİ (14 çeşit + eski formatlar)
-                excuse_codes = ['YI', 'R', 'EV', 'EI', 'GO', 'MI', 'OI', 'RI', 
-                               'SEI', 'KI', 'IK', 'II', 'SI', 'B', 'I', 'X']
-                
-                if value in ['24']:
-                    # 24 saat: Hekim rengi, içi boş
-                    cell.value = ''
-                    hex_color = physician['color'].replace('#', '')
-                    cell.fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type='solid')
-                
-                elif value in ['16', '8']:
-                    # 16/8 saat: Hekim rengi, içinde saat
-                    cell.value = value
-                    hex_color = physician['color'].replace('#', '')
-                    cell.fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type='solid')
-                
-                elif value in excuse_codes:
-                    # Tüm mazeret tipleri: Gri renk (excuseColor), içi boş
-                    cell.value = ''
-                    hex_color = excuse_color.replace('#', '')
-                    cell.fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type='solid')
-                
-                else:
-                    # Nöbet yok: Boş, beyaz
-                    cell.value = ''
-                    cell.fill = PatternFill(start_color='FFFFFF', end_color='FFFFFF', fill_type='solid')
-        
-        # Excel dosyasını hafızaya yaz
-        output = io.BytesIO()
-        wb.save(output)
-        output.seek(0)
-        
-        filename = f'Nobet_Listesi_{month_names[month]}_{year}.xlsx'
-        
-        return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=filename
-        )
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+    snaps = published_all()
+    available = sorted(snaps)
+    ym = request.args.get('ym') or (available[-1] if available else None)
+    return jsonify({'success': True, 'available': available, 'data': snaps.get(ym)})
 
 
-@app.route('/api/create-puantaj', methods=['POST'])
-def create_puantaj():
-    """
-    Puantaj oluştur (otomatik template)
-    
-    Form Data:
-    - data: JSON string (physicians, schedule, year, month, daysInMonth)
-    
-    Returns: Excel dosyası
-    """
-    try:
-        # JSON data'yı al
-        import json
-        data = json.loads(request.form.get('data', '{}'))
-        
-        # TEMPLATE'İ BACKEND'DEN YÜK (kullanıcı yüklemesin)
-        template_path = os.path.join(os.path.dirname(__file__), 'templates', 'puantaj.xlsx')
-        if not os.path.exists(template_path):
-            return jsonify({'error': 'Puantaj template bulunamadı!'}), 500
-        
-        wb = openpyxl.load_workbook(template_path)
-        ws = wb.active
-        
-        # Ay/Yıl güncelle
-        month_names = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN',
-                      'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK']
-        
-        year = data.get('year', 2026)
-        month = data.get('month', 0)
-        
-        if ws['A1'].value:
-            current_text = str(ws['A1'].value)
-            import re
-            updated_text = re.sub(r'\d{4}\s+\w+\s+AYI', 
-                                f'{year} {month_names[month]} AYI', 
-                                current_text)
-            ws['A1'].value = updated_text
-        
-        physicians = data.get('physicians', [])
-        schedule = data.get('schedule', {})
-        days_in_month = data.get('daysInMonth', 31)
-        holidays = data.get('holidays', [])  # YENİ: Tatil günleri
-        
-        # DEBUG: GELENVERİ
-        print(f"\n=== PUANTAJ DEBUG ===")
-        print(f"Physicians sayısı: {len(physicians)}")
-        for i, p in enumerate(physicians[:3]):  # İlk 3'ü yazdır
-            print(f"  [{i}] {p.get('name')} - title: '{p.get('title')}' - displayName: '{p.get('displayName')}'")
-        print(f"Schedule sayısı: {len(schedule)}")
-        
-        # HEKİMLERİ SIRALA: UZM.DR. önce, sonra TABİP
-        def sort_key(physician):
-            title = physician.get('title', '').lower()
-            # UZM.DR. olanlar önce (0), TABİP olanlar sonra (1)
-            # "Uzm.Dr", "uzm.dr", "UZM.DR" hepsini yakala
-            is_specialist = 'uzm' in title
-            print(f"  SORT: {physician.get('name')} - title='{physician.get('title')}' - is_specialist={is_specialist}")
-            return (0 if is_specialist else 1, physician.get('name', ''))
-        
-        physicians_sorted = sorted(physicians, key=sort_key)
-        
-        # DEBUG
-        print(f"\n=== PUANTAJ OLUŞTURMA ===")
-        print(f"Physicians sayısı: {len(physicians_sorted)}")
-        if physicians_sorted:
-            print(f"İlk hekim: {physicians_sorted[0]}")
-        print(f"Schedule sayısı: {len(schedule)}")
-        
-        # A1 hücresini güncelle (ay/yıl bilgisi varsa)
-        if ws['A1'].value:
-            current_text = str(ws['A1'].value)
-            # Ay adını güncelle
-            for m_name in ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN',
-                          'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK']:
-                if m_name in current_text.upper():
-                    current_text = current_text.upper().replace(m_name, month_names[month])
-                    break
-            ws['A1'].value = current_text
-        
-        # Sayfa adını da güncelle
-        ws.title = month_names[month]
-        
-        # BAŞLIK SATIRINI BOYAMA (Satır 3 - Gün numaraları)
-        # SADECE holidays listesindeki günleri gri yap
-        from datetime import datetime, timedelta
-        for day in range(1, days_in_month + 1):
-            col = 4 + day  # E, F, G... sütunları
-            header_cell = ws.cell(row=3, column=col)
-            
-            # Tatil kontrolü: SADECE holidays listesinde varsa
-            is_holiday = day in holidays  # Frontend'den gelen tatil günleri
-            
-            if is_holiday:
-                header_cell.fill = PatternFill(start_color='D1D5DB', end_color='D1D5DB', fill_type='solid')
-        
-        # HEKİMLERİ DOĞRUDAN YAZ (Satır 4'ten başlayarak)
-        start_row = 4
-        
-        # Türkçe harfleri büyük harfe çevirme fonksiyonu
-        def to_upper_turkish(text):
-            """Türkçe harfleri doğru şekilde büyültür"""
-            turkish_map = {
-                'i': 'İ',
-                'ş': 'Ş',
-                'ç': 'Ç',
-                'ğ': 'Ğ',
-                'ü': 'Ü',
-                'ö': 'Ö'
-            }
-            text = text.upper()  # Önce standart upper
-            # Sonra Türkçe harfleri düzelt
-            for lower, upper in turkish_map.items():
-                text = text.replace(lower, upper)
-            return text
-        
-        print(f"\n=== HEKİM YAZMA BAŞLIYOR ===")
-        for index, physician in enumerate(physicians_sorted):
-            row = start_row + index
-            print(f"\nSatır {row} - Hekim {index+1}:")
-            
-            # A sütunu: Sıra numarası
-            ws.cell(row=row, column=1).value = index + 1
-            print(f"  A{row} = {index + 1}")
-            
-            # B sütunu: TC Kimlik No
-            tc = physician.get('tc', '')
-            ws.cell(row=row, column=2).value = tc
-            print(f"  B{row} = {tc}")
-            
-            # C sütunu: Adı Soyadı (BÜYÜK HARFLER - TÜRKÇE)
-            name_upper = to_upper_turkish(physician['name'])
-            ws.cell(row=row, column=3).value = name_upper
-            print(f"  C{row} = {name_upper}")
-            
-            # D sütunu: Ünvan (Branş) - TABİP veya UZM.DR.
-            title = physician.get('title', '').lower()
-            # "Uzm.Dr", "uzm.dr", "UZM.DR" hepsini yakala
-            if 'uzm' in title:
-                branch = 'UZM.DR.'
-            else:
-                branch = 'TABİP'
-            ws.cell(row=row, column=4).value = branch
-            print(f"  D{row} = {branch}")
-            
-            # E-AI sütunları (5-35): Nöbet saatleri (günler 1-31)
-            for day in range(1, days_in_month + 1):
-                key = f"{physician['name']}-{day}"
-                value = schedule.get(key, '')
-                
-                col = 4 + day  # E=5, F=6, G=7...
-                cell = ws.cell(row=row, column=col)
-                
-                if value:  # Sadece dolu günleri logla
-                    # Değeri dönüştür
-                    cell_value = None
-                    
-                    # MAZERET TİPLERİ (14 çeşit)
-                    excuse_map = {
-                        'YI': 'Yİ',   # Yıllık İzin
-                        'R': 'R',     # Raporlu
-                        'EV': 'EV',   # Evlilik İzni
-                        'EI': 'Eİ',   # Eğitim İzni
-                        'GO': 'GÖ',   # Görevlendirme
-                        'MI': 'Mİ',   # Mazeret İzni
-                        'OI': 'Öİ',   # Ölüm İzni
-                        'RI': 'Rİ',   # Refakat İzni
-                        'SEI': 'SEİ', # Sendika İzni
-                        'KI': 'Kİ',   # Kongre İzni
-                        'IK': 'İK',   # İş Kazası
-                        'II': 'İİ',   # İdari İzin
-                        'SI': 'Sİ',   # Sevk İzin
-                        'B': None,    # Boşluk - boş bırak
-                        # Eski formatlar (geriye dönük uyumluluk)
-                        'I': 'Yİ',
-                        'X': 'R'
-                    }
-                    
-                    if value in excuse_map:
-                        cell_value = excuse_map[value]
-                    elif value in ['24', '16', '8']:
-                        cell_value = value  # Nöbet saati
-                    
-                    # Hücreye yaz
-                    cell.value = cell_value
-                    if cell_value:
-                        print(f"  Gün {day}: {cell_value}")
-        
-        print(f"\n=== YAZMA BİTTİ ===")
-        print(f"Toplam {len(physicians)} hekim yazıldı")
-        
-        # Excel dosyasını hafızaya yaz
-        print(f"\n=== EXCEL KAYIT ===")
-        print(f"Worksheet title: {ws.title}")
-        print(f"Max row: {ws.max_row}")
-        print(f"A4 değeri: {ws.cell(4, 1).value}")
-        print(f"B4 değeri: {ws.cell(4, 2).value}")
-        print(f"C4 değeri: {ws.cell(4, 3).value}")
-        print(f"D4 değeri: {ws.cell(4, 4).value}")
-        
-        output = io.BytesIO()
-        
-        try:
-            wb.save(output)
-            print(f"✅ Workbook kaydedildi")
-        except Exception as save_error:
-            print(f"❌ Save hatası: {save_error}")
-            raise
-        
-        output.seek(0)
-        print(f"Output size: {output.getbuffer().nbytes} bytes")
-        
-        filename = f'Puantaj_{month_names[month]}_{year}.xlsx'
-        
-        return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=filename
-        )
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+@app.route('/api/export/<kind>', methods=['GET'])
+@require()
+def export(kind):
+    builder = exports.BUILDERS.get(kind)
+    ym = request.args.get('ym', '')
+    if not builder or not YM_RE.match(ym):
+        return jsonify({'success': False, 'message': 'Geçersiz istek'}), 400
+    if session['role'] == 'admin' and request.args.get('source') != 'published':
+        doc, _ = load_working()
+    else:
+        snap = published_all().get(ym)
+        if not snap:
+            return jsonify({'success': False, 'message': 'Bu ay yayınlanmamış'}), 404
+        doc = {'settings': snap['settings'], 'physicians': snap['physicians'],
+               'months': {ym: snap['month']}}
+    buf, filename = builder(doc, ym)
+    return send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-@app.route('/api/create-nobet-isimleri', methods=['POST'])
-def create_nobet_isimleri():
-    """
-    Nöbet isimleri listesi oluştur (otomatik template)
-    
-    Form Data:
-    - data: JSON string (physicians, schedule, year, month, daysInMonth)
-    
-    Returns: Excel dosyası
-    """
-    try:
-        # JSON data'yı al
-        import json
-        data = json.loads(request.form.get('data', '{}'))
-        
-        physicians = data.get('physicians', [])
-        schedule = data.get('schedule', {})
-        year = data.get('year', 2026)
-        month = data.get('month', 0)
-        days_in_month = data.get('daysInMonth', 31)
-        holidays = data.get('holidays', [])  # YENİ: Tatil günleri
-        
-        print(f"\n=== NÖBET İSİMLERİ DEBUG ===")
-        print(f"Physicians sayısı: {len(physicians)}")
-        for i, p in enumerate(physicians, 1):
-            print(f"  {i}. {p.get('name')} - {p.get('title')}")
-        print(f"Schedule keys: {len(schedule)}")
-        print(f"Year: {year}, Month: {month}, Days: {days_in_month}")
-        print(f"Holidays: {holidays}")
-        
-        # TEMPLATE'İ BACKEND'DEN YÜK
-        template_path = os.path.join(os.path.dirname(__file__), 'templates', 'nobetisimler_template.xlsx')
-        if not os.path.exists(template_path):
-            return jsonify({'error': 'Nöbet isimleri template bulunamadı!'}), 500
-        
-        wb = openpyxl.load_workbook(template_path)
-        ws = wb.active
-        
-        month_names = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN',
-                      'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK']
-        
-        # Başlık güncelle (A5)
-        ws['A5'].value = f"  {year} {month_names[month]} AYI NÖBET LİSTESİ"
-        
-        # Satır 7'den itibaren günleri doldur
-        from datetime import datetime, timedelta
-        start_date = datetime(year, month + 1, 1)
-        
-        for day in range(1, days_in_month + 1):
-            row = 6 + day  # Satır 7, 8, 9...
-            current_date = start_date + timedelta(days=day - 1)
-            
-            # A sütunu: Tarih
-            ws.cell(row=row, column=1).value = current_date
-            
-            # B sütunu: Gün adı
-            day_names = ['PAZARTESİ', 'SALI', 'ÇARŞAMBA', 'PERŞEMBE', 'CUMA', 'CUMARTESİ', 'PAZAR']
-            day_name_cell = ws.cell(row=row, column=2)
-            day_name_cell.value = day_names[current_date.weekday()]
-            
-            # Tatil kontrolü: SADECE holidays listesinde varsa
-            is_holiday = day in holidays
-            
-            if is_holiday:
-                day_name_cell.fill = PatternFill(start_color='D1D5DB', end_color='D1D5DB', fill_type='solid')
-            
-            # O gün nöbet tutan hekimleri bul
-            mesai_doctors = []  # 8 saat
-            nobet_24_doctors = []  # 24 saat
-            nobet_16_doctors = []  # 16 saat
-            
-            for physician in physicians:
-                key = f"{physician['name']}-{day}"
-                value = schedule.get(key, '')
-                
-                if value == '8':
-                    # Ünvan ekle + TAM AD SOYAD (name, displayName değil)
-                    title = 'UZM.DR.' if physician.get('title') == 'Uzm.Dr' else 'DR.'
-                    full_name = f"{title}{physician['name']}"  # TAM AD SOYAD
-                    mesai_doctors.append(full_name)
-                elif value == '24':
-                    title = 'UZM.DR.' if physician.get('title') == 'Uzm.Dr' else 'DR.'
-                    full_name = f"{title}{physician['name']}"  # TAM AD SOYAD
-                    nobet_24_doctors.append(full_name)
-                elif value == '16':
-                    title = 'UZM.DR.' if physician.get('title') == 'Uzm.Dr' else 'DR.'
-                    full_name = f"{title}{physician['name']}"  # TAM AD SOYAD
-                    nobet_16_doctors.append(f"{full_name}(16)")
-            
-            # C sütunu: MESAİ (8 saat) - + ile birleştir
-            if mesai_doctors:
-                ws.cell(row=row, column=3).value = '+'.join(mesai_doctors)
-            
-            # D, E, F sütunları: NÖBET (24+16 saat)
-            # 24 ve 16 saatleri birleştir
-            all_nobet = nobet_24_doctors + nobet_16_doctors
-            
-            # İlk 3 tanesi D, E, F'ye
-            for i, doctor_name in enumerate(all_nobet[:3]):
-                ws.cell(row=row, column=4 + i).value = doctor_name
-            
-            # 3'ten fazlaysa, son sütuna + ile ekle
-            if len(all_nobet) > 3:
-                last_cell = ws.cell(row=row, column=6)  # F sütunu
-                existing = last_cell.value or ''
-                additional = '+'.join(all_nobet[3:])
-                last_cell.value = f"{existing}+{additional}" if existing else additional
-        
-        # G SÜTUNUNU DOLDUR - TÜM HEKİMLER (Her Excel satırına 1 hekim)
-        # G7: 1.Hekim1, G8: 2.Hekim2, G9: 3.Hekim3...
-        for idx, physician in enumerate(physicians, 1):
-            row = 6 + idx  # G7, G8, G9...
-            
-            # Ünvan belirleme
-            if physician.get('title') == 'Uzm.Dr':
-                title = 'ACİL UZM.DR.'  # Uzman doktorlara "ACİL" ön eki
-            else:
-                title = 'DR.'
-            
-            full_name = f"{title}{physician['name']}"
-            ws.cell(row=row, column=7).value = f"{idx}.{full_name}"
-        
-        print(f"\n=== G SÜTUNU TAMAMLANDI ===")
-        print(f"G7-G{6+len(physicians)}: Tüm hekimler listelenmiş")
-        print(f"Toplam {len(physicians)} hekim")
-        
-        # Excel dosyasını hafızaya yaz
-        output = io.BytesIO()
-        wb.save(output)
-        output.seek(0)
-        
-        return send_file(output, download_name=f'Nobet_Isimleri_{month_names[month]}_{year}.xlsx', as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    
-    except Exception as e:
-        print(f"❌ HATA: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
 
-# ================== STATIC ==================
-
+# ================== SAYFALAR ==================
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return redirect('/nobet_login.html')
+
 
 @app.route('/<path:path>')
 def static_files(path):
-    try:
-        return send_from_directory('.', path)
-    except:
-        return "Not found", 404
+    # Yalnızca public/ klasörü dışarıya açıktır (kaynak kod ve şablonlar değil)
+    resp = send_from_directory(PUBLIC_DIR, path, max_age=0)
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
+
+
+@app.after_request
+def no_cache_api(resp):
+    if request.path.startswith('/api/'):
+        resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000, debug=False)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
